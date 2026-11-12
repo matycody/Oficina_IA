@@ -113,6 +113,14 @@ async function checkFile(rel) {
 }
 
 /* ---------- proveedores de IA ---------- */
+function friendly(lab, st, msg) {
+  msg = String(msg);
+  if (st === 429) return `${lab}: se alcanzó el límite de uso (cuota gratuita o por minuto). Esperá un momento o probá con otro modelo. Detalle: ${msg.slice(0, 140)}`;
+  if ([500, 502, 503, 504].includes(st)) return `${lab} está saturado en este momento (error ${st}). Reintenté varias veces; probá de nuevo en un minuto o con otro modelo.`;
+  if (st === 401 || st === 403) return `${lab} rechazó la API key (error ${st}). Revisala en Ajustes. Detalle: ${msg.slice(0, 120)}`;
+  if (st === 404) return `${lab}: no encontró ese modelo (error 404). Elegí otro modelo en la tarjeta del agente. Detalle: ${msg.slice(0, 120)}`;
+  return `${lab} respondió ${st}: ${msg.slice(0, 160)}`;
+}
 async function callLLM({ provider, messages, system, model }) {
   if (!PROVIDERS.includes(provider)) throw new HttpErr(400, 'Proveedor desconocido');
   const K = cfg.keys[provider];
@@ -136,10 +144,16 @@ async function callLLM({ provider, messages, system, model }) {
     url = base + '/chat/completions'; if (K.key) headers.Authorization = 'Bearer ' + K.key;
     body = { model: mdl, messages: [{ role: 'system', content: system || '' }, ...m] }; pick = j => (((j.choices || [])[0] || {}).message || {}).content || ''; use = j => ({ in: (j.usage || {}).prompt_tokens || 0, out: (j.usage || {}).completion_tokens || 0 });
   }
-  let r; try { r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }); }
-  catch (e) { throw new HttpErr(502, 'No pude conectar con ' + provider + ': ' + (e.message || e)); }
-  const raw = await r.text(); let j = {}; try { j = JSON.parse(raw); } catch (e) {}
-  if (!r.ok) { const msg = (j.error && (j.error.message || j.error)) || raw.slice(0, 200); throw new HttpErr(r.status === 429 ? 429 : 502, `${provider} respondió ${r.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, { quota: r.status === 429 }); }
+  let r, raw, j = {};
+  for (let t = 0; ; t++) {
+    try { r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }); }
+    catch (e) { throw new HttpErr(502, 'No pude conectar con ' + provider + ': ' + (e.message || e), { api: true }); }
+    raw = await r.text(); try { j = JSON.parse(raw); } catch (e) { j = {}; }
+    if (r.ok) break;
+    if (t < 3 && ([500, 502, 503, 504].includes(r.status) || (r.status === 429 && t < 1))) { await new Promise(res => setTimeout(res, r.status === 429 ? 4000 : 1500 * (t + 1))); continue; }
+    const msg = (j.error && (j.error.message || j.error)) || raw.slice(0, 200), m = typeof msg === 'string' ? msg : JSON.stringify(msg);
+    throw new HttpErr(r.status === 429 ? 429 : 502, friendly(provider, r.status, m), { api: true });
+  }
   const text = (pick(j) || '').trim(); if (!text) throw new HttpErr(502, 'Respuesta vacía de ' + provider);
   return { text, usage: use(j) };
 }

@@ -1298,7 +1298,7 @@ async function pcFetch(path,o){o=o||{};
  const base=(CFG.pc.url||'http://localhost:8787').replace(/\/$/,'');let r;
  try{r=await fetch(base+path,{method:o.method||'GET',headers:{'x-office-token':CFG.pc.token||'','content-type':'application/json'},body:o.body?JSON.stringify(o.body):undefined})}
  catch(e){throw new Error('No encuentro el servidor en '+base+'. ¿Lo iniciaste en tu PC?')}
- const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||('Error '+r.status));if(j.quota)e.quota=true;e.status=r.status;throw e}return j}
+ const j=await r.json().catch(()=>({}));if(!r.ok){const e=new Error(j.error||('Error '+r.status));if(j.api)e.api=true;e.status=r.status;throw e}return j}
 async function pcConnect(silent){
  try{PC.info=await pcFetch('/api/status');PC.on=true;PC.err='';saveCfg()}
  catch(e){PC.on=false;PC.info=null;PC.err=e.message||String(e);if(!silent)addMsg('sys','','⚠ '+PC.err)}
@@ -1359,7 +1359,7 @@ const ADAPTERS={
    if(e&&e.code==='rate_limited')throw new Error('Se alcanzó el límite de uso de Claude. Probá en unos minutos.');throw e}},
  async pc(a,msgs,sys){const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));
   try{const j=await pcFetch('/api/llm',{method:'POST',body:{provider:a.provider,model:a.model||'',system:sys,messages:m}});addUsage(a,j.usage);return j.text}
-  catch(e){if(e.quota){const q=new Error(e.message);q.quota=true;throw q}throw e}},
+  catch(e){throw e}},
  async api(a,msgs,sys){const K=CFG.keys[a.provider]||{},kind=KIND[a.provider]||'openai',model=a.model||K.model||DEFMODEL[a.provider];
   const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));let url,headers={'content-type':'application/json'},body,pick,use=()=>null;
   if(kind==='anthropic'){url=(K.base||'https://api.anthropic.com')+'/v1/messages';headers['x-api-key']=K.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
@@ -1368,11 +1368,21 @@ const ADAPTERS={
    body={systemInstruction:{parts:[{text:sys}]},contents:m.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]}))};pick=j=>((j.candidates||[])[0]?.content?.parts||[]).map(c=>c.text||'').join('');use=j=>({in:j.usageMetadata?.promptTokenCount||0,out:(j.usageMetadata?.candidatesTokenCount||0)+(j.usageMetadata?.thoughtsTokenCount||0)})}
   else{const base=(K.base||DEFBASE[a.provider]||'').replace(/\/$/,'');if(!base)throw new Error('Falta la URL base de la API para '+PROVIDERS[a.provider].label);
    url=base+'/chat/completions';if(K.key)headers.Authorization='Bearer '+K.key;body={model,messages:[{role:'system',content:sys},...m]};pick=j=>j.choices?.[0]?.message?.content||'';use=j=>({in:j.usage?.prompt_tokens||0,out:j.usage?.completion_tokens||0})}
-  let r;try{r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body)})}catch(e){throw new Error('No pude conectar con '+PROVIDERS[a.provider].label+' (¿clave, URL o CORS?)')}
-  const raw=await r.text();let j={};try{j=JSON.parse(raw)}catch(e){}
-  if(!r.ok){const msg=j.error?.message||j.error||raw.slice(0,160);const e=new Error(`${PROVIDERS[a.provider].label} respondió ${r.status}: ${typeof msg==='string'?msg:JSON.stringify(msg)}`);if(r.status===429)e.quota=true;throw e}
+  const lab=PROVIDERS[a.provider].label;let r,raw,j={};
+  for(let t=0;;t++){
+   try{r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body)})}catch(e){const er=new Error('No pude conectar con '+lab+' (¿clave, URL o CORS?)');er.api=true;throw er}
+   raw=await r.text();try{j=JSON.parse(raw)}catch(e){j={}}
+   if(r.ok)break;
+   if(t<3&&([500,502,503,504].includes(r.status)||(r.status===429&&t<1))){await sleep(r.status===429?4000:1500*(t+1));continue}
+   const msg=j.error?.message||j.error||raw.slice(0,160);const er=new Error(friendlyApi(lab,r.status,typeof msg==='string'?msg:JSON.stringify(msg)));er.api=true;throw er}
   const t=(pick(j)||'').trim();if(!t)throw new Error('Respuesta vacía de '+PROVIDERS[a.provider].label);addUsage(a,use(j));return t}
 };
+function friendlyApi(lab,st,msg){
+ if(st===429)return `${lab}: se alcanzó el límite de uso (cuota gratuita o por minuto). Esperá un momento o probá con otro modelo. Detalle: ${String(msg).slice(0,140)}`;
+ if(st===503||st===500||st===502||st===504)return `${lab} está saturado en este momento (error ${st}). Reintenté varias veces; probá de nuevo en un minuto o con otro modelo.`;
+ if(st===401||st===403)return `${lab} rechazó la API key (error ${st}). Revisala en Ajustes. Detalle: ${String(msg).slice(0,120)}`;
+ if(st===404)return `${lab}: no encontró ese modelo (error 404). Elegí otro modelo en la tarjeta del agente. Detalle: ${String(msg).slice(0,120)}`;
+ return `${lab} respondió ${st}: ${String(msg).slice(0,160)}`}
 function addUsage(a,u){if(!u)return;a.tokIn=(a.tokIn||0)+(u.in||0);a.tokOut=(a.tokOut||0)+(u.out||0);a.calls=(a.calls||0)+1;save();renderChips();if(typeof renderTeam==='function')renderTeam()}
 const fmtN=n=>n>=1e6?(n/1e6).toFixed(2)+' M':n>=1e3?(n/1e3).toFixed(1)+' mil':String(n);
 const totalTok=()=>agents.concat(ADV?[ADV]:[]).reduce((t,a)=>t+(a.tokIn||0)+(a.tokOut||0),0);
@@ -1457,7 +1467,7 @@ async function verifyLoop(task,qa,prods){
   const bad=v.who;bad.state='working';bad.progress=0;bad.doing=`Corrigiendo lo que marcó ${qa.name}: ${short(v.reason,70)}`;
   const mine=lastOut[bad.id];bad.tasks.push({text:'Corrección: '+short(v.reason,50),st:'en curso'});
   let fixed;try{fixed=await work(bad,task,results.filter(r=>r.kind!=='qa'&&r.agent!==bad),`\n\nTu trabajo anterior:\n${mine?mine.text:''}\n\nFeedback de QA (${qa.name}): ${v.reason}\nCorregí lo señalado y devolvé tu parte completa y actualizada.`)}
-  catch(e){if(e.quota){bad.state='blocked';sendToLounge(bad);verdict={ok:false,text:'No se pudo corregir: sin cupo.',agent:qa,rounds};return {ok:false}}throw e}
+  catch(e){if(e.api){bad.state='idle';verdict={ok:false,text:'No se pudo corregir: '+e.message,agent:qa,rounds};addMsg('sys','','⚠ '+e.message);return {ok:false}}if(e.quota){bad.state='blocked';sendToLounge(bad);verdict={ok:false,text:'No se pudo corregir: sin cupo.',agent:qa,rounds};return {ok:false}}throw e}
   bad.state='done';bad.progress=1;bad.doing='Entregó la corrección.';bad.tasks.forEach(t=>{if(t.st==='en curso')t.st='corregido'});
   results.push({agent:bad,text:fixed,kind:'fix'});addMsg('agent',`${bad.name} · ${bad.role} (corrección)`,fixed);
   await visit(bad,qa,'🔧 Ya lo corregí: '+summary(fixed).replace(/^Corregido:\s*/i,'').slice(0,60),'Lo reviso de nuevo.');
@@ -1476,7 +1486,8 @@ async function runTask(task){
    a.state='working';a.progress=0;a.bubble='';a.doing=`Trabajando en: «${short(task,60)}»`;addMsg('sys','',`▶ ${a.name} (${a.role}) se puso a trabajar en ${roomName('o:'+a.dept)}.`);
    let text;
    try{text=await work(a,task,results.filter(r=>r.kind!=='qa'))}
-   catch(e){if(e.quota){a.state='blocked';a.bubble='Sin cupo';a.tasks.forEach(t=>{if(t.st==='en curso')t.st='sin cupo'});addMsg('sys','',`⛔ ${a.name} se quedó sin cupo del plan ${planName(a)} (se reinicia en ${resetIn(a)}). Se va al lounge a descansar.`);renderTeam();sendToLounge(a);continue}throw e}
+   catch(e){if(e.api){addMsg('sys','','⚠ '+e.message+' · '+a.name+' se omite en esta tarea.');a.state='idle';a.bubble='';a.tasks.forEach(t=>{if(t.st==='en curso')t.st='error'});renderTeam();continue}
+    if(e.quota){a.state='blocked';a.bubble='Sin cupo';a.tasks.forEach(t=>{if(t.st==='en curso')t.st='sin cupo'});addMsg('sys','',`⛔ ${a.name} se quedó sin cupo del plan ${planName(a)} (se reinicia en ${resetIn(a)}). Se va al lounge a descansar.`);renderTeam();sendToLounge(a);continue}throw e}
    a.state='done';a.progress=1;a.doing='Entregó su parte: '+summary(text).slice(0,90);a.tasks.forEach(t=>{if(t.st==='en curso')t.st='hecho'});
    results.push({agent:a,text,kind:'work'});addMsg('agent',`${a.name} · ${a.role}`,text);renderTeam();
    const next=prods.slice(i+1).find(x=>x.state!=='blocked')||(qa&&qa.state!=='blocked'?qa:null);
