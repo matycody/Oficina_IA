@@ -9,9 +9,9 @@ function setName(a,v){v=(v||'').trim();if(!v)return;if(a.isMe){CFG.name=v;saveCf
 function setLook(a,k){a.lookIdx=k;a.look=LOOKS[k];if(a.isMe){CFG.look=k;saveCfg()}else if(a.adv){CFG.advLook=k;saveCfg()}else save();renderRoster();renderTeam();if(selected===a)renderDetail();if(selRoom)renderRoom()}
 function lookPicker(a){const w=el('div','looks');LOOKS.forEach((L,k)=>{const cn=document.createElement('canvas');drawPortrait(cn,{look:L,provider:a.provider},38);cn.className=a.lookIdx===k?'on':'';cn.title='Aspecto '+(k+1);cn.onclick=()=>setLook(a,k);w.appendChild(cn)});return w}
 function roomPeople(k){if(k==='o:jefe'||k==='o:rec')return actors().filter(a=>(a.cur&&a.cur.room===k)&&!a.hidden);
- if(k.startsWith('o:'))return agents.filter(a=>a.provider===k.slice(2));
+ if(k.startsWith('o:'))return agents.filter(a=>a.dept===k.slice(2));
  return actors().filter(a=>a.cur&&a.cur.room===k&&!a.hidden)}
-function roomChatList(k){if(k==='o:jefe')return [];if(k==='o:rec')return [ADV];if(k.startsWith('o:'))return agents.filter(a=>a.provider===k.slice(2));return agents.filter(a=>a.cur&&a.cur.room===k)}
+function roomChatList(k){if(k==='o:jefe')return [];if(k==='o:rec')return [ADV];if(k.startsWith('o:'))return agents.filter(a=>a.dept===k.slice(2));return agents.filter(a=>a.cur&&a.cur.room===k)}
 function fitZoom(r){const tw=baseTW||20,zw=(W*0.56)/((r.w+r.h)*tw),zh=(H*0.6)/(((r.w+r.h)/2+3)*tw);return Math.max(0.9,Math.min(4,zw,zh))}
 function selectAgent(a){
  selRoom=null;selected=a;zoomT=3.3;axT=0.36;ayT=0.63;
@@ -49,7 +49,7 @@ function fillTarget(){const s=$('#target'),v=s.value;s.innerHTML='';const add=(v
  add('team','Mandar directo a todo el equipo (sin pasar por la asesora)');
  if(ADV)add('a'+ADV.id,`Charlar solo con ${ADV.name} (tu asesor/a)`);
  agents.forEach(a=>add('a'+a.id,`Hablar solo con ${a.name} (${a.role})`));
- PO.forEach(p=>{if(agents.some(a=>a.provider===p))add('g:o:'+p,'Hablar con toda la oficina: '+roomName('o:'+p))});
+ PO.forEach(p=>{if(agents.some(a=>a.dept===p))add('g:o:'+p,'Hablar con toda la oficina: '+roomName('o:'+p))});
  if([...s.options].some(o=>o.value===v))s.value=v;setPh()}
 function setPh(){const v=$('#target').value;$('#inp').placeholder=v==='brief'?`Contale el trabajo a ${ADV.name}: ella lo reparte al equipo…`:v==='team'?'Dale una tarea al equipo…':'Escribí tu mensaje…'}
 $('#target').addEventListener('change',setPh);
@@ -69,10 +69,10 @@ function renderRoster(){
  item('🧑‍💼','Para '+CFG.name,()=>selectRoom('o:jefe'),selRoom==='o:jefe');
  item('✋','Te toca',()=>{const a=agents.find(asking);if(a)selectAgent(a);showTab('chat')},false,{n:()=>agents.filter(asking).length});
  box.appendChild(el('div','shead','Departamentos'));
- ['o:jefe','o:rec',...PO.filter(p=>agents.some(a=>a.provider===p)).map(p=>'o:'+p),'meet','kitchen'].forEach(k=>{
+ ['o:jefe','o:rec',...PO.filter(p=>agents.some(a=>a.dept===p)).map(p=>'o:'+p),'meet','kitchen'].forEach(k=>{
   const col=k==='o:jefe'?'#e0a526':k==='o:rec'?'#e0577a':k==='meet'?'#8f9bb8':k==='kitchen'?'#e0803a':PROVIDERS[k.slice(2)].color;
   const sq=el('span','dsq');sq.style.background=col;
-  item(sq,roomName(k),()=>selRoom===k?deselect():selectRoom(k),selRoom===k,{n:()=>k.startsWith('o:')&&k!=='o:jefe'&&k!=='o:rec'?agents.filter(a=>a.provider===k.slice(2)&&asking(a)).length:0})});
+  item(sq,roomName(k),()=>selRoom===k?deselect():selectRoom(k),selRoom===k,{n:()=>k.startsWith('o:')&&k!=='o:jefe'&&k!=='o:rec'?agents.filter(a=>a.dept===k.slice(2)&&asking(a)).length:0})});
  box.appendChild(el('div','shead','Tus agentes'));
  [ADV,...agents].forEach(a=>{const c=el('div','sag'+(selected===a?' sel':''));const cn=document.createElement('canvas');c.appendChild(cn);
   const m=el('div','mid');const nm=el('div','nm');nm.appendChild(el('span',null,a.name));const ch=el('span','pchip',prov(a).ini);ch.style.background=prov(a).color;ch.style.fontSize='9px';nm.appendChild(ch);
@@ -150,7 +150,7 @@ const ROLE_LIST=Object.keys(ROLES);
 function renderTeam(){
  const box=$('#teamBox');if(box.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;box.innerHTML='';
  const dl=el('datalist');dl.id='roles';ROLE_LIST.forEach(r=>{const o=el('option');o.value=r;dl.appendChild(o)});box.appendChild(dl);
- box.appendChild(el('div','small','Los productores trabajan en este orden; el rol QA/Revisor verifica al final y devuelve lo que falla. Cada IA tiene su oficina (hasta 4 personas por IA).'));
+ box.appendChild(el('div','small','Los productores trabajan en este orden; el rol QA/Revisor verifica al final y devuelve lo que falla. Cada oficina es un área de trabajo (hasta 4 escritorios); cada agente usa la IA que elijas.'));
  {const c=el('div','card');c.appendChild(el('b',null,'Tu oficina y tu asesor/a'));
   const g1=el('div','grid');const nm=el('input');nm.value=CFG.name;nm.placeholder='Tu nombre';nm.onchange=()=>{CFG.name=nm.value.trim()||CFG.name;ME.name=CFG.name;saveCfg();fillTarget();updateHud();renderRoster()};
   const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Tu aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=CFG.look;lk.onchange=()=>{CFG.look=+lk.value;ME.lookIdx=CFG.look;ME.look=LOOKS[CFG.look];saveCfg()};
@@ -168,13 +168,15 @@ function renderTeam(){
   const ar=el('div','arrows');const up=el('button',null,'↑'),dn=el('button',null,'↓');up.disabled=running||i===0;dn.disabled=running||i===agents.length-1;
   up.onclick=()=>{[agents[i-1],agents[i]]=[agents[i],agents[i-1]];save();renderTeam();renderRoster()};dn.onclick=()=>{[agents[i+1],agents[i]]=[agents[i],agents[i+1]];save();renderTeam();renderRoster()};ar.appendChild(up);ar.appendChild(dn);top.appendChild(ar);c.appendChild(top);
   const g=el('div','grid');
-  const ps=el('select');PO.forEach(k=>{const o=el('option',null,PROVIDERS[k].label+' · '+roomName('o:'+k));o.value=k;ps.appendChild(o)});ps.value=a.provider;
-  ps.onchange=()=>{if(running){ps.value=a.provider;return}const n=agents.filter(x=>x.provider===ps.value&&x!==a).length;if(n>=4){addMsg('sys','','Esa oficina ya tiene 4 personas. Elegí otra IA.');ps.value=a.provider;return}
-   a.provider=ps.value;a.model='';a.planIdx=Math.min(a.planIdx,prov(a).plans.length-1);resetPlacement();save();renderTeam();renderRoster()};
+  const ps=el('select');PO.forEach(k=>{const o=el('option',null,'Oficina: '+roomName('o:'+k));o.value=k;ps.appendChild(o)});ps.value=a.dept;
+  ps.onchange=()=>{if(running){ps.value=a.dept;return}const n=agents.filter(x=>x.dept===ps.value&&x!==a).length;if(n>=4){addMsg('sys','','Esa oficina ya tiene sus 4 escritorios ocupados. Elegí otra.');ps.value=a.dept;return}
+   a.dept=ps.value;resetPlacement();save();renderTeam();renderRoster()};
+  const es=el('select');PO.forEach(k=>{const o=el('option',null,'IA: '+PROVIDERS[k].label);o.value=k;es.appendChild(o)});es.value=a.provider;
+  es.onchange=()=>{if(running){es.value=a.provider;return}a.provider=es.value;a.model='';a.planIdx=Math.min(a.planIdx,prov(a).plans.length-1);save();renderTeam();renderRoster()};
   const pl=el('select');p.plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)});pl.value=a.planIdx;pl.onchange=()=>{a.planIdx=+pl.value;save();renderTeam();renderRoster()};
   const role=el('input');role.setAttribute('list','roles');role.value=a.role;role.placeholder='Rol';role.onchange=()=>{a.role=role.value.trim()||a.role;save();fillTarget();renderRoster();updateDetail()};
   const mp=modelPicker(a.provider,a.model,v=>{a.model=(v===DEFMODEL[a.provider]?'':v);save();renderTeam()});g.appendChild(mp);
-  g.appendChild(ps);g.appendChild(pl);g.appendChild(role);const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=a.lookIdx;lk.onchange=()=>{a.lookIdx=+lk.value;a.look=LOOKS[a.lookIdx];save();renderRoster();renderTeam()};g.appendChild(lk);c.appendChild(g);
+  g.appendChild(ps);g.appendChild(es);g.appendChild(pl);g.appendChild(role);const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=a.lookIdx;lk.onchange=()=>{a.lookIdx=+lk.value;a.look=LOOKS[a.lookIdx];save();renderRoster();renderTeam()};g.appendChild(lk);c.appendChild(g);
   const lim=limit(a),bar=el('div','bar'),bi=el('i');bi.style.width=Math.min(100,a.used/lim*100)+'%';if(a.used>=lim)bi.style.background='var(--bad)';bar.appendChild(bi);c.appendChild(bar);
   c.appendChild(el('div','small',`Tokens: ${fmtN(a.tokIn||0)} entrada · ${fmtN(a.tokOut||0)} salida · ${a.calls||0} llamadas`+(conn(a)?'':' · sin API key (no responde)')));
   c.appendChild(el('div','small',`Ventana de 5 h: ${a.used}/${lim} mensajes (estimado)`+(a.winStart?` · se reinicia en ${resetIn(a)}`:'')));
@@ -196,14 +198,15 @@ function modelPicker(provider,cur,onSet){
  sel.onchange=()=>{if(sel.value==='__otro'){const v=(prompt('ID exacto del modelo (por ejemplo '+DEFMODEL[provider]+'):')||'').trim();if(!v){sel.value=cv;return}const o=el('option',null,'Personalizado · '+v);o.value=v;sel.insertBefore(o,oo);sel.value=v}onSet(sel.value)};
  return sel}
 function addAgentCard(box){
- if(agents.length<8){const f=el('div','add');f.appendChild(el('b',null,'Sumar un empleado'));const g=el('div','grid');
-  const ps=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.provider===k).length>=4;const o=el('option',null,PROVIDERS[k].label+(full?' (oficina llena)':''));o.value=k;o.disabled=full;ps.appendChild(o)});ps.value=PO.find(k=>agents.filter(x=>x.provider===k).length<4)||'otro';
+ if(agents.length<20){const f=el('div','add');f.appendChild(el('b',null,'Sumar un empleado'));const g=el('div','grid');
+  const ds=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.dept===k).length>=4;const o=el('option',null,'Oficina: '+roomName('o:'+k)+(full?' (llena)':''));o.value=k;o.disabled=full;ds.appendChild(o)});ds.value=PO.find(k=>agents.filter(x=>x.dept===k).length<4)||'otro';
+  const ps=el('select');PO.forEach(k=>{const o=el('option',null,'IA: '+PROVIDERS[k].label);o.value=k;ps.appendChild(o)});ps.value='gemini';
   const nm=el('input');nm.placeholder='Nombre de la persona';nm.value=NAMEPOOL.find(n=>!agents.some(a=>a.name===n))||'';const rl=el('input');rl.setAttribute('list','roles');rl.placeholder='Rol (ej. Frontend)';
   const pl=el('select');const fillPl=()=>{pl.innerHTML='';PROVIDERS[ps.value].plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)})};fillPl();let newModel='';const mw=el('div');mw.style.display='contents';const fillMd=()=>{newModel='';mw.innerHTML='';mw.appendChild(modelPicker(ps.value,'',v=>{newModel=v}))};fillMd();ps.onchange=()=>{fillPl();fillMd()};
-  g.appendChild(ps);g.appendChild(pl);g.appendChild(mw);g.appendChild(nm);g.appendChild(rl);f.appendChild(g);
-  const ad=el('button','pri','Agregar');ad.onclick=()=>{if(running)return;const a=mkAgent({provider:ps.value,name:nm.value.trim()||NAMEPOOL[agents.length%NAMEPOOL.length],role:rl.value.trim()||'Colaborador',planIdx:+pl.value,model:newModel,look:agents.length});
+  g.appendChild(ds);g.appendChild(ps);g.appendChild(pl);g.appendChild(mw);g.appendChild(nm);g.appendChild(rl);f.appendChild(g);
+  const ad=el('button','pri','Agregar');ad.onclick=()=>{if(running)return;const a=mkAgent({provider:ps.value,dept:ds.value,name:nm.value.trim()||NAMEPOOL[agents.length%NAMEPOOL.length],role:rl.value.trim()||'Colaborador',planIdx:+pl.value,model:newModel,look:agents.length});
    agents.push(a);resetPlacement();save();fillTarget();renderTeam();renderSettings();renderChips();renderRoster()};
-  f.appendChild(ad);f.appendChild(el('div','small','Si esa IA tiene su API key en Ajustes, responde con la IA real; si no, en modo simulado.'));box.appendChild(f)}
+  f.appendChild(ad);f.appendChild(el('div','small','La oficina es el área de trabajo (Backend, Frontend…). La IA es el motor: necesita su API key en Ajustes para responder.'));box.appendChild(f)}
 
 }
 /* --- pestaña Ajustes: conexiones, departamentos y empleados --- */
@@ -221,7 +224,7 @@ function renderSettings(){
  const h=el('div','card');h.appendChild(el('b',null,'Conexiones · API keys'));h.appendChild(el('div','small',PC.on?'Pegá la clave de cada proveedor: se guarda en tu PC (server/data/config.json) y las llamadas a la IA salen desde ahí. Sin clave, esa IA responde en modo simulado.':'Pegá la clave de cada proveedor. Sin servidor en tu PC se guarda en este navegador (texto plano) y se envía directo al proveedor. Con la PC conectada se guarda en tu computadora. Sin clave, esa IA responde en modo simulado.'));const sr=el('label','small');sr.style.cssText='display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer';const ck=el('input');ck.type='checkbox';ck.checked=CFG.strict!==false;ck.onchange=()=>{CFG.strict=ck.checked;saveCfg()};sr.appendChild(ck);sr.appendChild(document.createTextNode('Modo real: si un agente no tiene API key, no responde (sin respuestas de ejemplo)'));h.appendChild(sr);
  box.appendChild(h);
  PO.forEach(p=>{const P=PROVIDERS[p],onPC=PC.on&&PC.info.keys[p],K=PC.on?(onPC||{}):(CFG.keys[p]||{});const c=el('div','card');
-  const top=el('div','top');const t=el('b',null,P.label);t.style.color=P.color;top.appendChild(t);top.appendChild(el('span','small',roomName('o:'+p)));
+  const top=el('div','top');const t=el('b',null,P.label);t.style.color=P.color;top.appendChild(t);
   const has=PC.on?!!onPC:!!(K.key||K.base);const bd=el('span','badge '+(has?'real':'sim'),has?(PC.on?'CONECTADA (PC)':'CONECTADA'):'SIMULADA');bd.style.marginLeft='auto';top.appendChild(bd);c.appendChild(top);
   const st=el('div','stack');const key=el('input');key.type='password';key.placeholder=PC.on&&onPC?'•••• guardada en tu PC (escribí otra para cambiarla)':KEYHINT[p];key.value=PC.on?'':(K.key||'');key.autocomplete='off';
   const mdl=el('input');mdl.type='text';mdl.placeholder='Modelo (por defecto: '+DEFMODEL[p]+')';mdl.value=K.model||'';
@@ -337,7 +340,7 @@ const totalTok=()=>agents.concat(ADV?[ADV]:[]).reduce((t,a)=>t+(a.tokIn||0)+(a.t
 const KIND={claude:'anthropic',openai:'openai',gemini:'gemini',copilot:'openai',otro:'openai'};
 const MODELS={
  claude:[{id:'claude-fable-5-2',label:'Fable 5.2 · el más potente'},{id:'claude-opus-5-5',label:'Opus 5.5 · muy potente'},{id:'claude-sonnet-5-5',label:'Sonnet 5.5 · equilibrado'},{id:'claude-haiku-5-5',label:'Haiku 5.5 · el más barato y rápido'}],
- gemini:[{id:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro · el más potente'},{id:'gemini-3.8-flash',label:'Gemini 3.8 Flash · rápido y capaz'},{id:'gemini-2.5-pro',label:'Gemini 2.5 Pro · razonamiento'},{id:'gemini-3.5-flash-lite',label:'Gemini 3.5 Flash-Lite · barato'},{id:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite · el más barato'}]};
+ gemini:[{id:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro · el más potente'},{id:'gemini-3.8-flash',label:'Gemini 3.8 Flash · rápido y capaz'},{id:'gemini-2.5-pro',label:'Gemini 2.5 Pro · razonamiento'},{id:'gemini-2.5-flash',label:'Gemini 2.5 Flash · equilibrado'},{id:'gemini-3.5-flash-lite',label:'Gemini 3.5 Flash-Lite · barato'},{id:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite · el más barato'}]};
 const DEFMODEL={claude:'claude-sonnet-5-5',openai:'gpt-4o-mini',gemini:'gemini-3.8-flash',copilot:'openai/gpt-4.1',otro:'llama-3.1-70b-instruct'};
 const DEFBASE={openai:'https://api.openai.com/v1',copilot:'https://models.github.ai/inference',otro:''};
 const KEYHINT={claude:'sk-ant-… (console.anthropic.com)',openai:'sk-… (platform.openai.com)',gemini:'AIza… (aistudio.google.com)',copilot:'Token de GitHub con permiso "models"',otro:'Clave de tu proveedor (opcional si es local)'};
@@ -373,7 +376,7 @@ async function work(a,task,outs,extra){
 async function moveTo(a,spot,sit){if(a._mv)await a._mv;const p=route(a.cur,spot);a.cur=spot;const pr=goTo(a,p,sit,spot.f);a._mv=pr;await pr;if(a._mv===pr)a._mv=null}
 /* caminar a la oficina de otra persona (como en el video de Iterhub) */
 async function visit(from,to,msg,reply){
- addMsg('sys','',`🚶 ${from.name} va a la oficina de ${to.name} (${roomName(to.home?to.home.room:'o:'+to.provider)}).`);
+ addMsg('sys','',`🚶 ${from.name} va a la oficina de ${to.name} (${roomName(to.home?to.home.room:'o:'+to.dept)}).`);
  await moveTo(from,visitSpot(to),false);
  from.bubble=msg;await sleep(2400);from.bubble='';
  if(reply){to.bubble=reply;to.wave=1.2;await sleep(1300);to.bubble=''}
@@ -431,7 +434,7 @@ async function runTask(task){
   for(let i=0;i<prods.length;i++){
    turn=i+1;const a=prods[i];
    if(a.state==='blocked'){continue}
-   a.state='working';a.progress=0;a.bubble='';a.doing=`Trabajando en: «${short(task,60)}»`;addMsg('sys','',`▶ ${a.name} (${a.role}) se puso a trabajar en la oficina de ${prov(a).label}.`);
+   a.state='working';a.progress=0;a.bubble='';a.doing=`Trabajando en: «${short(task,60)}»`;addMsg('sys','',`▶ ${a.name} (${a.role}) se puso a trabajar en ${roomName('o:'+a.dept)}.`);
    let text;
    try{text=await work(a,task,results.filter(r=>r.kind!=='qa'))}
    catch(e){if(e.quota){a.state='blocked';a.bubble='Sin cupo';a.tasks.forEach(t=>{if(t.st==='en curso')t.st='sin cupo'});addMsg('sys','',`⛔ ${a.name} se quedó sin cupo del plan ${planName(a)} (se reinicia en ${resetIn(a)}). Se va al lounge a descansar.`);renderTeam();sendToLounge(a);continue}throw e}
@@ -601,7 +604,7 @@ function lifeTick(){if(!CFG.life||running||pending||summoned)return;const AC=act
 setInterval(lifeTick,1000);
 
 /* ================= Convocatoria a la oficina del usuario ================= */
-const reps=()=>PO.map(p=>agents.find(a=>a.provider===p&&a.state!=='blocked')).filter(Boolean);
+const reps=()=>PO.map(p=>agents.find(a=>a.dept===p&&a.state!=='blocked')).filter(Boolean);
 async function summon(mode,custom,wh){
  const toMeet=wh==='meet';
  if(running){addMsg('sys','','Hay una tarea en curso, esperá a que termine.');return}
@@ -623,7 +626,7 @@ async function summon(mode,custom,wh){
 async function dismissSummon(){const s=summoned;if(!s)return;summoned=null;running=true;
  try{s.list.forEach(a=>{a.pose=null;a.bubble=''});s.host.bubble='';
   await Promise.all([...s.list.map(a=>moveTo(a,homeSpot(a),true)),moveTo(s.host,homeSpot(s.host),true)]);
-  if(s.mode==='reps'){s.list.forEach(a=>{a.bubble='Les cuento a mi oficina lo que hablamos.';agents.filter(x=>x.provider===a.provider&&x!==a).forEach(m=>{m.wave=1.2;m.thought='👍'})});
+  if(s.mode==='reps'){s.list.forEach(a=>{a.bubble='Les cuento a mi oficina lo que hablamos.';agents.filter(x=>x.dept===a.dept&&x!==a).forEach(m=>{m.wave=1.2;m.thought='👍'})});
    await sleep(2600);s.list.forEach(a=>{a.bubble=''});agents.forEach(m=>{if(m.thought==='👍')m.thought=''})}
  }finally{running=false}}
 
@@ -651,7 +654,7 @@ async function advisorAnswer(a,q){
 function resetPlacement(){agents.forEach(a=>{if(a.beh)a.beh.stop=true});agents.forEach(placeAtDesk)}
 function mkSpecial(){
  ME=mkAgent({provider:'jefe',name:CFG.name,role:'Jefe',planIdx:0,look:CFG.look});ME.home=deskSeat('jefe',0);ME.isMe=true;
- ADV=mkAgent({provider:'claude',name:CFG.advName,role:'Asesor/a',planIdx:CFG.advPlan,look:CFG.advLook});ADV.home=deskSeat('rec',0);ADV.adv=true;
+ ADV=mkAgent({provider:'gemini',name:CFG.advName,role:'Asesor/a',planIdx:CFG.advPlan,look:CFG.advLook});ADV.home=deskSeat('rec',0);ADV.adv=true;
  placeAtDesk(ME);placeAtDesk(ADV);if(CFG.away)hideMe()}
 
 /* ================= Arranque ================= */
@@ -662,7 +665,7 @@ setInterval(()=>{const s=$('#status');
  if(selRoom&&!$('#detail').contains(document.activeElement)&&roomSig()!==RSIG)renderRoom()},500);
 setInterval(()=>{agents.forEach(a=>{if(a.state==='blocked'){rollWin(a);if(a.used<limit(a)&&!running){a.state='idle';returnFromLounge(a);addMsg('sys','',`🌴 ${a.name} volvió de descansar: su cupo se reinició.`);renderTeam();renderRoster()}}})},15000);
 load();mkSpecial();agents.forEach(placeAtDesk);applyTheme();buildStatic();fillTarget();updateHud();setChat(CFG.chat!==false);renderTeam();renderSettings();renderResults();renderChips();renderRoster();pcBoot();
-addMsg('sys','','Cada IA tiene su oficina. Dale una tarea al equipo o hacé clic en una persona para acercarte y hablarle. Si alguien necesita un dato, te lo pregunta acá.');
+addMsg('sys','','Cada oficina es un área de trabajo. Dale una tarea al equipo o hacé clic en una persona para acercarte y hablarle. Si alguien necesita un dato, te lo pregunta acá.');
 new ResizeObserver(resize).observe(cv);resize();requestAnimationFrame(frame);
 window._office={getState:()=>({selRoom,summoned:!!summoned,running,away:CFG.away,beh:actors().map(a=>a.name+':'+(a.beh?(a.act||'beh'):'-'))}),act:(i,n)=>{const a=actors()[i];if(a.beh)return;const c={stop:false};a.beh=c;c.done=(async()=>{try{await runAct(a,c,n)}finally{await settle(a,c)}})()},summon,setAway,selectRoom,classify,setRot:v=>{rot=v;rotTarget=null},setZoom:v=>{zoom=zoomT=v},agents:()=>agents,select:i=>selectAgent(agents[i]),deselect,sample:()=>sampleFn};
 try{if(window.claude&&claude.use){claude.use('sample').then(s=>{sampleFn=s||null;sampleState=s?'disponible':'no disponible';renderChips()}).catch(()=>{sampleState='no disponible';renderChips()})}else{sampleState='no disponible';renderChips()}}catch(e){sampleState='no disponible';renderChips()}

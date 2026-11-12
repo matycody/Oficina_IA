@@ -1,6 +1,6 @@
 # Oficina IA
 
-Oficina 3D isométrica de agentes de IA: cada IA (Claude, Copilot, Gemini, ChatGPT…) es una persona con su oficina, su plan y su cupo de 5 h. Se coordinan por roles (Backend, Frontend, QA…) para cumplir tareas.
+Oficina 3D isométrica de agentes de IA: cada agente es una persona con su rol, su oficina (por función: Backend, Frontend, Datos, Contenido, QA) y su IA (Gemini, Claude, ChatGPT, Copilot u otra compatible OpenAI). Se coordinan por roles (Backend, Frontend, QA…) para cumplir tareas.
 
 ## Estructura
 - `src/a_head.html` – HTML + CSS

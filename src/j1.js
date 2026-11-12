@@ -6,11 +6,11 @@ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 
 /* ================= Proveedores (fase 2: acá se enchufan las APIs reales) ================= */
 const PROVIDERS={
- claude :{label:'Claude' ,ini:'CL',color:'#e0714b',plans:['Free','Pro','Max'],mode:'real',tools:['Código','Razonamiento largo','Documentos'],office:'Estudio Claude'},
- copilot:{label:'Copilot',ini:'CP',color:'#8b5cf6',plans:['Free','Pro'],mode:'sim',tools:['VS Code','GitHub','Terminal'],office:'Dev Studio Copilot'},
- gemini :{label:'Gemini' ,ini:'GE',color:'#4a86f7',plans:['Free','Pro (estudiante)','Ultra'],mode:'sim',tools:['Búsqueda web','Multimodal','Pruebas'],office:'Laboratorio Gemini'},
- openai :{label:'ChatGPT',ini:'GP',color:'#14a37f',plans:['Free','Plus','Pro'],mode:'sim',tools:['Redacción','Ideas','Datos'],office:'Sala de ideas ChatGPT'},
- otro   :{label:'Otra IA',ini:'IA',color:'#7b8aa6',plans:['Free','Pago'],mode:'sim',tools:['General'],office:'Oficina abierta'},
+ claude :{label:'Claude' ,ini:'CL',color:'#e0714b',plans:['Free','Pro','Max'],mode:'real',tools:['Código','Razonamiento largo','Documentos'],office:'Backend'},
+ copilot:{label:'Copilot',ini:'CP',color:'#8b5cf6',plans:['Free','Pro'],mode:'sim',tools:['VS Code','GitHub','Terminal'],office:'Frontend'},
+ gemini :{label:'Gemini' ,ini:'GE',color:'#4a86f7',plans:['Free','Pro (estudiante)','Ultra'],mode:'sim',tools:['Búsqueda web','Multimodal','Pruebas'],office:'Datos e investigación'},
+ openai :{label:'ChatGPT',ini:'GP',color:'#14a37f',plans:['Free','Plus','Pro'],mode:'sim',tools:['Redacción','Ideas','Datos'],office:'Contenido y redacción'},
+ otro   :{label:'Otra IA',ini:'IA',color:'#7b8aa6',plans:['Free','Pago'],mode:'sim',tools:['General'],office:'Calidad (QA)'},
  jefe   :{label:'Vos',ini:'YO',color:'#f2b01e',plans:['—'],mode:'real',tools:['Decisiones','Prioridades'],office:'Tu oficina'},
  rec    :{label:'Asesora',ini:'AS',color:'#e0577a',plans:['—'],mode:'real',tools:['Agenda','Delegación'],office:'Recepción'}
 };
@@ -42,14 +42,11 @@ const LOOKS=[
  {skin:'#d9a47a',hair:'#1c1512',hs:'short',beard:0,top:'#2d3748',kind:'jacket',inner:'#f2b01e',pants:'#232838',shoe:'#1f2430',glasses:0,hgt:1.0},
  {skin:'#f1c9a5',hair:'#5a3825',hs:'bun',beard:0,top:'#7a5ac8',kind:'blazer',inner:'#f4efe6',pants:'#2b3042',shoe:'#2b2b33',glasses:1,hgt:0.96}];
 const DEFAULTS=[
- {provider:'claude',name:'Fable',role:'Arquitecto',planIdx:2,model:'claude-fable-5-2',look:0},
- {provider:'claude',name:'Opus',role:'Backend',planIdx:2,model:'claude-opus-5-5',look:1},
- {provider:'claude',name:'Sonnet',role:'Frontend',planIdx:1,model:'',look:2},
- {provider:'claude',name:'Haiku',role:'QA',planIdx:1,model:'claude-haiku-5-5',look:3},
- {provider:'gemini',name:'Gem Pro',role:'Investigador',planIdx:1,model:'gemini-3.1-pro-preview',look:4},
- {provider:'gemini',name:'Gem Flash',role:'Redactor',planIdx:1,model:'',look:5},
- {provider:'gemini',name:'Gem Lite',role:'Analista de datos',planIdx:1,model:'gemini-3.5-flash-lite',look:6},
- {provider:'gemini',name:'Gem Mini',role:'Soporte',planIdx:1,model:'gemini-2.5-flash-lite',look:7}];
+ {provider:'gemini',dept:'claude',name:'Mateo',role:'Backend',planIdx:1,model:'',look:0},
+ {provider:'gemini',dept:'copilot',name:'Andrea',role:'Frontend',planIdx:1,model:'',look:1},
+ {provider:'gemini',dept:'gemini',name:'Valentina',role:'Analista de datos',planIdx:1,model:'gemini-3.5-flash-lite',look:2},
+ {provider:'gemini',dept:'openai',name:'Lucas',role:'Redactor',planIdx:1,model:'gemini-2.5-flash-lite',look:3},
+ {provider:'gemini',dept:'otro',name:'Sofía',role:'QA',planIdx:1,model:'gemini-2.5-flash',look:4}];
 const NAMEPOOL=['Valentina','Joaquín','Camila','Tomás','Martina','Nicolás','Julieta','Bruno'];
 const EXAMPLES=[
  'Armá un sistema de login con usuarios y contraseñas para una web',
@@ -65,21 +62,21 @@ let camX=21,camY=7.4,zoom=0.94,zoomT=0.94,camTx=21,camTy=7.4;
 const PLAY={jefe:0,lounge:0};
 let selRoom=null,summoned=null,currentTask='',ME=null,ADV=null;
 const CFGK='oficina-ia-v4';
-const CFG=Object.assign({name:'Matías',look:6,advName:'Elena',advLook:7,advPlan:1,away:false,dark:true,life:true,names:{},keys:{},chat:true,strict:true,teamV2:false,pc:{url:'http://localhost:8787',token:''}},(()=>{try{return JSON.parse(localStorage.getItem(CFGK)||'{}')}catch(e){return {}}})());
+const CFG=Object.assign({name:'Matías',look:6,advName:'Elena',advLook:7,advPlan:1,away:false,dark:true,life:true,names:{},keys:{},chat:true,strict:true,teamV3:false,pc:{url:'http://localhost:8787',token:''}},(()=>{try{return JSON.parse(localStorage.getItem(CFGK)||'{}')}catch(e){return {}}})());
 const saveCfg=()=>{try{localStorage.setItem(CFGK,JSON.stringify(CFG))}catch(e){}};
 let DARK=CFG.dark;
 const actors=()=>ME?[...agents,ME,ADV]:agents;
 
 function mkAgent(c){
  const n=++uidN,li=(c.look!=null?c.look:n-1)%LOOKS.length;
- return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',tokIn:c.tokIn||0,tokOut:c.tokOut||0,calls:c.calls||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
+ return {id:n,provider:c.provider,dept:c.dept||c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',tokIn:c.tokIn||0,tokOut:c.tokOut||0,calls:c.calls||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
   x:0,y:0,face:[0,1],path:[],pr:null,sitAfter:false,seated:true,state:'idle',progress:0,bubble:'',chat:[],askLeft:2,
   phase:Math.random()*6,away:false,cur:null,doing:'Esperando una tarea.',tasks:[],lastReply:'',wave:0,
   sitK:1,v:0,walkPh:0,hy:0,hyG:0,glanceAt:0,dip:0,arm:{},pose:null,prop:null,thought:'',act:'',alpha:1,alphaT:1,hurry:false,beh:null,hidden:false}
 }
-function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',tokIn:a.tokIn||0,tokOut:a.tokOut||0,calls:a.calls||0,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,dept:a.dept||a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',tokIn:a.tokIn||0,tokOut:a.tokOut||0,calls:a.calls||0,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
- let base=Array.isArray(c)?c:DEFAULTS;if(!CFG.teamV2){base=DEFAULTS;CFG.teamV2=true;saveCfg()}
+ let base=Array.isArray(c)?c:DEFAULTS;if(!CFG.teamV3){base=DEFAULTS;CFG.teamV3=true;saveCfg()}
  agents=base.map(mkAgent);if(base===DEFAULTS)save()}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;
 const planName=a=>prov(a).plans[a.planIdx]||prov(a).plans[0];
@@ -102,10 +99,10 @@ function deskSeat(p,s){const o=OFFS[p],dx=o.ox+3.5,cx=deskX(p,s),cy=chairYOf(p,s
  if(p==='jefe')return {room:'o:jefe',x:cx,y:o.chairY,f:[0,1],in:[...JIN,[5.6,o.chairY],[cx,o.chairY]]};
  if(p==='rec')return {room:'o:rec',x:cx,y:o.chairY,f:[0,1],in:[[dx,7],[dx,6],[dx,5],[o.ox+5.9,5],[o.ox+5.9,o.chairY],[cx,o.chairY]]};
  return {room:'o:'+p,x:cx,y:cy,f:[0,1],in:[[dx,7],[dx,o.doorY],[dx,cy],[cx,cy]]}}
-function seatOf(a){if(a.home)return a.home;const s=agents.filter(x=>x.provider===a.provider).indexOf(a);return deskSeat(a.provider,Math.max(0,s)%4)}
+function seatOf(a){if(a.home)return a.home;const s=agents.filter(x=>x.dept===a.dept).indexOf(a);return deskSeat(a.dept,Math.max(0,s)%4)}
 function visitSpot(t){if(t.isMe)return {room:'o:jefe',x:3.5,y:3.7,f:[0,-1],in:[...JIN,[5.6,3.7],[3.5,3.7]]};
  if(t.adv){const o=OFFS.rec,dx=o.ox+3.5;return {room:'o:rec',x:dx,y:5,f:[0,-1],in:[[dx,7],[dx,6],[dx,5]]}}
- const op=t.home?'jefe':t.provider,o=OFFS[op],dx=o.ox+3.5,ts=seatOf(t);
+ const op=t.home?'jefe':t.dept,o=OFFS[op],dx=o.ox+3.5,ts=seatOf(t);
  return {room:'o:'+op,x:dx,y:ts.y,f:[ts.x<dx?-1:1,0],in:[[dx,7],[dx,o.doorY],[dx,ts.y]]}}
 const MIN=[[13,7],[13,8],[13,9]];
 const SEATS=(()=>{const a=[];
@@ -136,7 +133,7 @@ function goTo(a,p,sit,face){return new Promise(res=>{if(a.pr){const r0=a.pr;a.pr
 async function moveTo(a,spot,sit){const p=route(a.cur,spot);a.cur=spot;await goTo(a,p,sit,spot.f)}
 function placeAtDesk(a){const s=seatOf(a);if(a.pr){const r=a.pr;a.pr=null;r()}a._mv=null;a.cur=s;a.x=s.x;a.y=s.y;a.face=s.f;a.path=[];a.seated=true;a.away=false;a.sitK=1;a.v=0;a.pose=null;a.prop=null;a.act='';a.thought='';a.hurry=false}
 const homeSpot=a=>seatOf(a);
-const ownerP=a=>a.home?a.home.room.slice(2):a.provider;
+const ownerP=a=>a.home?a.home.room.slice(2):a.dept;
 const atHome=a=>{const h=seatOf(a),c=a.cur;return !!c&&c.room===h.room&&c.x===h.x&&c.y===h.y&&a.seated&&!a.path.length};
 /* --- lugares de actividad --- */
 function boardSpot(p){const o=OFFS[p],dx=o.ox+3.5;if(p==='jefe')return {room:'o:jefe',wall:1,x:0.7,y:1.5,f:[-1,0],in:[...JIN,[5.6,2.12],[0.7,2.12],[0.7,1.5]]};return {room:'o:'+p,wall:1,x:o.ox+0.7,y:o.oy+1.5,f:[-1,0],in:[[dx,7],[dx,o.doorY],[dx,o.oy+2.1],[o.ox+0.7,o.oy+2.1],[o.ox+0.7,o.oy+1.5]]}}
@@ -215,7 +212,7 @@ function wallArtX(wx,y0,y1,z0,z1,col,fn,frame){addCustom(wx+0.12,(y0+y1)/2,()=>{
  if(frame)quadX(wx+0.115,y0-0.06,y1+0.06,z0-0.06,z1+0.06,frame);quadX(wx+0.12,y0,y1,z0,z1,col);if(fn)fn(wx+0.13)},0.07)}
 
 /* ---- escritorio temático ---- */
-function agentOfDesk(p,s){if(p==='jefe')return ME;if(p==='rec')return ADV;return agents.filter(a=>a.provider===p)[s]}
+function agentOfDesk(p,s){if(p==='jefe')return ME;if(p==='rec')return ADV;return agents.filter(a=>a.dept===p)[s]}
 function stCol(a,pc){return !a?'#3a4258':a.state==='working'?pc:a.state==='done'?'#34c98d':a.state==='asking'?'#f2c14b':a.state==='blocked'?'#8a93a8':'#4a5370'}
 function addDesk(p,s,th){const o=OFFS[p],cx=deskX(p,s),y=o.oy+2.4+((p==='jefe'||p==='rec')?0:(s>>1)*2.45),P=PROVIDERS[p];
  addBox(cx-1.15,y,0.74,2.3,1.0,0.07,th.desk,{});
