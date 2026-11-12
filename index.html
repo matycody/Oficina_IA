@@ -1206,7 +1206,7 @@ function renderTeam(){
  agents.forEach((a,i)=>{rollWin(a);const p=prov(a);const c=el('div','card'+(selected===a?' sel':''));
   const top=el('div','top');const cn=document.createElement('canvas');cn.style.cssText='width:34px;height:34px;border-radius:50%;background:#e8eefb';top.appendChild(cn);
   const nm=el('input');nm.value=a.name;nm.style.cssText='font-weight:700;flex:1;min-width:0';nm.onchange=()=>{a.name=nm.value.trim()||a.name;save();fillTarget();renderRoster()};top.appendChild(nm);
-  top.appendChild(el('span','badge '+p.mode,p.mode==='real'?'REAL':'SIM'));
+  {const k=conn(a);top.appendChild(el('span','badge '+(k?'real':'sim'),k?(k.pc?'API · PC':'API'):'SIN KEY'))}
   const ar=el('div','arrows');const up=el('button',null,'↑'),dn=el('button',null,'↓');up.disabled=running||i===0;dn.disabled=running||i===agents.length-1;
   up.onclick=()=>{[agents[i-1],agents[i]]=[agents[i],agents[i-1]];save();renderTeam();renderRoster()};dn.onclick=()=>{[agents[i+1],agents[i]]=[agents[i],agents[i+1]];save();renderTeam();renderRoster()};ar.appendChild(up);ar.appendChild(dn);top.appendChild(ar);c.appendChild(top);
   const g=el('div','grid');
