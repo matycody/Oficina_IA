@@ -45,8 +45,8 @@ const DEFAULTS=[
  {provider:'gemini',dept:'claude',name:'Mateo',role:'Backend',planIdx:1,model:'',look:0},
  {provider:'gemini',dept:'copilot',name:'Andrea',role:'Frontend',planIdx:1,model:'',look:1},
  {provider:'gemini',dept:'gemini',name:'Valentina',role:'Analista de datos',planIdx:1,model:'gemini-3.5-flash-lite',look:2},
- {provider:'gemini',dept:'openai',name:'Lucas',role:'Redactor',planIdx:1,model:'gemini-2.5-flash-lite',look:3},
- {provider:'gemini',dept:'otro',name:'Sofía',role:'QA',planIdx:1,model:'gemini-2.5-flash',look:4}];
+ {provider:'gemini',dept:'openai',name:'Lucas',role:'Redactor',planIdx:1,model:'gemini-3.1-flash-lite',look:3},
+ {provider:'gemini',dept:'otro',name:'Sofía',role:'QA',planIdx:1,model:'gemini-3.5-flash',look:4}];
 const NAMEPOOL=['Valentina','Joaquín','Camila','Tomás','Martina','Nicolás','Julieta','Bruno'];
 const EXAMPLES=[
  'Armá un sistema de login con usuarios y contraseñas para una web',
@@ -67,9 +67,11 @@ const saveCfg=()=>{try{localStorage.setItem(CFGK,JSON.stringify(CFG))}catch(e){}
 let DARK=CFG.dark;
 const actors=()=>ME?[...agents,ME,ADV]:agents;
 
+const OLDMODELS={'gemini-2.5-flash':'gemini-3.5-flash','gemini-2.5-flash-lite':'gemini-3.5-flash-lite','gemini-2.5-pro':'gemini-3.1-pro-preview','gemini-2.0-flash':'','gemini-2.0-flash-lite':''};
+const fixModel=m=>Object.prototype.hasOwnProperty.call(OLDMODELS,m)?OLDMODELS[m]:m;
 function mkAgent(c){
  const n=++uidN,li=(c.look!=null?c.look:n-1)%LOOKS.length;
- return {id:n,provider:c.provider,dept:c.dept||c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',tokIn:c.tokIn||0,tokOut:c.tokOut||0,calls:c.calls||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
+ return {id:n,provider:c.provider,dept:c.dept||c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:fixModel(c.model||''),tokIn:c.tokIn||0,tokOut:c.tokOut||0,calls:c.calls||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
   x:0,y:0,face:[0,1],path:[],pr:null,sitAfter:false,seated:true,state:'idle',progress:0,bubble:'',chat:[],askLeft:2,
   phase:Math.random()*6,away:false,cur:null,doing:'Esperando una tarea.',tasks:[],lastReply:'',wave:0,
   sitK:1,v:0,walkPh:0,hy:0,hyG:0,glanceAt:0,dip:0,arm:{},pose:null,prop:null,thought:'',act:'',alpha:1,alphaT:1,hurry:false,beh:null,hidden:false}

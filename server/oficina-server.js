@@ -158,6 +158,30 @@ async function callLLM({ provider, messages, system, model }) {
   return { text, usage: use(j) };
 }
 
+/* ---------- lista de modelos disponibles para cada key ---------- */
+async function listModels(provider) {
+  if (!PROVIDERS.includes(provider)) throw new HttpErr(400, 'Proveedor desconocido');
+  const K = cfg.keys[provider]; if (!K || (!K.key && !K.base)) throw new HttpErr(400, 'Sin API key', { nokey: true });
+  const kind = KIND[provider]; let url, headers = {}, map;
+  if (kind === 'anthropic') {
+    url = (K.base || 'https://api.anthropic.com').replace(/\/$/, '') + '/v1/models?limit=100'; headers['x-api-key'] = K.key; headers['anthropic-version'] = '2023-06-01';
+    map = j => (j.data || []).map(m => ({ id: m.id, label: m.display_name || m.id }));
+  } else if (kind === 'gemini') {
+    url = (K.base || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '') + '/models?pageSize=200'; headers['x-goog-api-key'] = K.key;
+    map = j => (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => ({ id: String(m.name || '').replace(/^models\//, ''), label: m.displayName || m.name }))
+      .filter(m => m.id.startsWith('gemini') && !/(tts|image|live|audio|embed|transcribe|translate|robotics|computer-use|omni|nano|banana|aqa)/i.test(m.id));
+  } else {
+    const base = (K.base || DEFBASE[provider] || '').replace(/\/$/, ''); if (!base) throw new HttpErr(400, 'Falta la URL base');
+    url = base + '/models'; if (K.key) headers.Authorization = 'Bearer ' + K.key;
+    map = j => (j.data || j || []).map(m => ({ id: m.id || m.name, label: m.id || m.name })).filter(m => m.id);
+  }
+  let r; try { r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) }); } catch (e) { throw new HttpErr(502, 'No pude conectar con ' + provider, { api: true }); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new HttpErr(502, friendly(provider, r.status, (j.error && j.error.message) || ''), { api: true });
+  const seen = {}; return map(j).filter(m => m.id && !seen[m.id] && (seen[m.id] = 1)).sort((a, b) => b.id.localeCompare(a.id)).slice(0, 60);
+}
+
 /* ---------- HTTP ---------- */
 const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
@@ -193,6 +217,7 @@ const server = http.createServer(async (req, res) => {
       }
       saveCfg(); return send(200, { ok: true });
     }
+    if (p === '/api/models' && req.method === 'GET') return send(200, { models: await listModels(u.searchParams.get('provider')) });
     if (p === '/api/llm' && req.method === 'POST') { const b = await readBody(req); return send(200, await callLLM(b)); }
     if (p === '/api/fs/list' && req.method === 'GET') return send(200, { items: fsList(u.searchParams.get('path') || '') });
     if (p === '/api/fs/read' && req.method === 'GET') return send(200, { content: fsRead(u.searchParams.get('path')) });
