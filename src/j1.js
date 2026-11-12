@@ -75,7 +75,7 @@ function mkAgent(c){
 }
 function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
- agents=(c&&c.length?c:DEFAULTS).map(mkAgent)}
+ agents=(Array.isArray(c)?c:DEFAULTS).map(mkAgent)}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;
 const planName=a=>prov(a).plans[a.planIdx]||prov(a).plans[0];
 const limit=a=>QUOTA[a.planIdx]??QUOTA[0];

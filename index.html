@@ -276,7 +276,7 @@ function mkAgent(c){
 }
 function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
- agents=(c&&c.length?c:DEFAULTS).map(mkAgent)}
+ agents=(Array.isArray(c)?c:DEFAULTS).map(mkAgent)}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;
 const planName=a=>prov(a).plans[a.planIdx]||prov(a).plans[0];
 const limit=a=>QUOTA[a.planIdx]??QUOTA[0];
@@ -1213,10 +1213,13 @@ function renderTeam(){
   const lim=limit(a),bar=el('div','bar'),bi=el('i');bi.style.width=Math.min(100,a.used/lim*100)+'%';if(a.used>=lim)bi.style.background='var(--bad)';bar.appendChild(bi);c.appendChild(bar);
   c.appendChild(el('div','small',`Ventana de 5 h: ${a.used}/${lim} mensajes (estimado)`+(a.winStart?` · se reinicia en ${resetIn(a)}`:'')));
   const row=el('div','top');const b1=el('button',null,'Acercar cámara');b1.onclick=()=>selectAgent(a);
-  const b2=el('button',null,'Quitar');b2.disabled=running||agents.length<=1;b2.onclick=()=>{agents.splice(i,1);if(selected===a)deselect();resetPlacement();save();fillTarget();renderTeam();renderChips();renderRoster()};
+  const b2=el('button',null,'Quitar');b2.disabled=running;b2.onclick=()=>{agents.splice(i,1);if(selected===a)deselect();resetPlacement();save();fillTarget();renderTeam();renderChips();renderRoster()};
   row.appendChild(b1);row.appendChild(b2);c.appendChild(row);box.appendChild(c);drawPortrait(cn,a,34)});
+ if(!agents.length){const c=el('div','card');c.appendChild(el('div','small','No hay agentes. Sumá el primero abajo (por ejemplo uno de Claude y uno de Gemini).'));box.appendChild(c)}
+ if(agents.length){const wipe=el('button',null,'Eliminar todos los agentes');wipe.disabled=running;wipe.onclick=()=>{if(!confirm('¿Eliminar a todos los agentes del equipo? (Tu oficina y tu asesora no se tocan.)'))return;removeAllAgents()};box.appendChild(wipe)}
  addAgentCard(box);
 }
+function removeAllAgents(){agents.forEach(a=>{if(a.beh)a.beh.stop=true});agents.length=0;if(selected&&!selected.isMe&&!selected.adv)deselect();summoned=null;resetPlacement();save();fillTarget();renderTeam();renderSettings();renderChips();renderRoster()}
 function addAgentCard(box){
  if(agents.length<8){const f=el('div','add');f.appendChild(el('b',null,'Sumar un empleado'));const g=el('div','grid');
   const ps=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.provider===k).length>=2;const o=el('option',null,PROVIDERS[k].label+(full?' (oficina llena)':''));o.value=k;o.disabled=full;ps.appendChild(o)});ps.value=PO.find(k=>agents.filter(x=>x.provider===k).length<2)||'otro';
@@ -1436,6 +1439,7 @@ async function verifyLoop(task,qa,prods){
   await visit(bad,qa,'🔧 Ya lo corregí: '+summary(fixed).replace(/^Corregido:\s*/i,'').slice(0,60),'Lo reviso de nuevo.');
  }}
 async function runTask(task){
+ if(!agents.length){addMsg('sys','','Todavía no hay agentes en el equipo. Sumá uno en la pestaña Equipo o en Ajustes.');return}
  running=true;t0=Date.now();results=[];verdict=null;currentTask=task;projDir='';lastCheck=null;renderResults();const team=agents.slice();$('#send').disabled=true;
  await Promise.all(agents.map(stopBeh));
  if(CFG.away)addMsg('sys','',`🧑‍💼 ${CFG.name} está ausente: ${ADV.name} atiende al equipo y responde sus dudas.`);
@@ -1492,6 +1496,7 @@ async function onSend(){
 /* ===== Nuevo trabajo: se lo contás a la asesora y ella lo reparte, como en la vida real ===== */
 const assignOf=(a,qa)=>a===qa?'revisar todo al final y devolver lo que falle':'la parte de '+(a.role||'trabajo').toLowerCase();
 async function briefAdvisor(text){
+ if(!agents.length){addMsg('sys','','Todavía no hay agentes en el equipo: sumá uno en la pestaña Equipo antes de pasarle un trabajo a '+ADV.name+'.');return}
  const adv=ADV;running=true;$('#send').disabled=true;
  try{
   if(summoned){const sd=summoned;summoned=null;sd.list.forEach(a=>{a.pose=null;a.bubble=''});sd.host.bubble='';await Promise.all([...sd.list.map(a=>moveTo(a,homeSpot(a),true)),moveTo(sd.host,homeSpot(sd.host),true)])}
