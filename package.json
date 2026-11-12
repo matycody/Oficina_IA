@@ -1,0 +1,13 @@
+{
+  "name": "oficina-ia",
+  "version": "2.0.0",
+  "description": "Oficina isométrica de agentes de IA, con servidor local para conectar tu PC y tus API keys",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": { "node": ">=18" },
+  "bin": { "oficina-ia": "server/oficina-server.js" },
+  "scripts": {
+    "start": "node server/oficina-server.js",
+    "build": "sh build.sh"
+  }
+}
