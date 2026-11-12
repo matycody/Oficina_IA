@@ -119,28 +119,29 @@ async function callLLM({ provider, messages, system, model }) {
   if (!K || (!K.key && !(provider === 'otro' && K.base))) throw new HttpErr(400, 'Ese proveedor no tiene API key cargada en la PC', { nokey: true });
   const kind = KIND[provider], mdl = model || K.model || DEFMODEL[provider];
   const m = (messages || []).map(x => ({ role: x.role === 'assistant' ? 'assistant' : 'user', content: String(x.content) }));
-  let url, headers = { 'content-type': 'application/json' }, body, pick;
+  let url, headers = { 'content-type': 'application/json' }, body, pick, use = () => null;
   if (kind === 'anthropic') {
     url = (K.base || 'https://api.anthropic.com').replace(/\/$/, '') + '/v1/messages';
     headers['x-api-key'] = K.key; headers['anthropic-version'] = '2023-06-01';
-    body = { model: mdl, max_tokens: 2048, system: system || '', messages: m }; pick = j => (j.content || []).map(c => c.text || '').join('');
+    body = { model: mdl, max_tokens: 4096, system: system || '', messages: m }; pick = j => (j.content || []).map(c => c.text || '').join(''); use = j => ({ in: (j.usage || {}).input_tokens || 0, out: (j.usage || {}).output_tokens || 0 });
   } else if (kind === 'gemini') {
     url = (K.base || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '') + `/models/${mdl}:generateContent`;
     headers['x-goog-api-key'] = K.key;
     body = { systemInstruction: { parts: [{ text: system || '' }] }, contents: m.map(x => ({ role: x.role === 'assistant' ? 'model' : 'user', parts: [{ text: x.content }] })) };
     pick = j => (((j.candidates || [])[0] || {}).content || { parts: [] }).parts.map(c => c.text || '').join('');
+    use = j => { const u = j.usageMetadata || {}; return { in: u.promptTokenCount || 0, out: (u.candidatesTokenCount || 0) + (u.thoughtsTokenCount || 0) }; };
   } else {
     const base = (K.base || DEFBASE[provider] || '').replace(/\/$/, '');
     if (!base) throw new HttpErr(400, 'Falta la URL base de la API para ' + provider);
     url = base + '/chat/completions'; if (K.key) headers.Authorization = 'Bearer ' + K.key;
-    body = { model: mdl, messages: [{ role: 'system', content: system || '' }, ...m] }; pick = j => (((j.choices || [])[0] || {}).message || {}).content || '';
+    body = { model: mdl, messages: [{ role: 'system', content: system || '' }, ...m] }; pick = j => (((j.choices || [])[0] || {}).message || {}).content || ''; use = j => ({ in: (j.usage || {}).prompt_tokens || 0, out: (j.usage || {}).completion_tokens || 0 });
   }
   let r; try { r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) }); }
   catch (e) { throw new HttpErr(502, 'No pude conectar con ' + provider + ': ' + (e.message || e)); }
   const raw = await r.text(); let j = {}; try { j = JSON.parse(raw); } catch (e) {}
   if (!r.ok) { const msg = (j.error && (j.error.message || j.error)) || raw.slice(0, 200); throw new HttpErr(r.status === 429 ? 429 : 502, `${provider} respondió ${r.status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`, { quota: r.status === 429 }); }
   const text = (pick(j) || '').trim(); if (!text) throw new HttpErr(502, 'Respuesta vacía de ' + provider);
-  return text;
+  return { text, usage: use(j) };
 }
 
 /* ---------- HTTP ---------- */
@@ -178,7 +179,7 @@ const server = http.createServer(async (req, res) => {
       }
       saveCfg(); return send(200, { ok: true });
     }
-    if (p === '/api/llm' && req.method === 'POST') { const b = await readBody(req); return send(200, { text: await callLLM(b) }); }
+    if (p === '/api/llm' && req.method === 'POST') { const b = await readBody(req); return send(200, await callLLM(b)); }
     if (p === '/api/fs/list' && req.method === 'GET') return send(200, { items: fsList(u.searchParams.get('path') || '') });
     if (p === '/api/fs/read' && req.method === 'GET') return send(200, { content: fsRead(u.searchParams.get('path')) });
     if (p === '/api/fs/write' && req.method === 'POST') { const b = await readBody(req); return send(200, { ok: true, path: fsWrite(b.path, b.content) }); }

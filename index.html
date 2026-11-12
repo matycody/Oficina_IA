@@ -243,10 +243,14 @@ const LOOKS=[
  {skin:'#d9a47a',hair:'#1c1512',hs:'short',beard:0,top:'#2d3748',kind:'jacket',inner:'#f2b01e',pants:'#232838',shoe:'#1f2430',glasses:0,hgt:1.0},
  {skin:'#f1c9a5',hair:'#5a3825',hs:'bun',beard:0,top:'#7a5ac8',kind:'blazer',inner:'#f4efe6',pants:'#2b3042',shoe:'#2b2b33',glasses:1,hgt:0.96}];
 const DEFAULTS=[
- {provider:'claude',name:'Mateo',role:'Backend',planIdx:1,look:0},
- {provider:'copilot',name:'Andrea',role:'Frontend',planIdx:0,look:1},
- {provider:'gemini',name:'Sofía',role:'QA',planIdx:1,look:2},
- {provider:'openai',name:'Lucas',role:'Redactor',planIdx:0,look:3}];
+ {provider:'claude',name:'Fable',role:'Arquitecto',planIdx:2,model:'claude-fable-5-2',look:0},
+ {provider:'claude',name:'Opus',role:'Backend',planIdx:2,model:'claude-opus-5-5',look:1},
+ {provider:'claude',name:'Sonnet',role:'Frontend',planIdx:1,model:'',look:2},
+ {provider:'claude',name:'Haiku',role:'QA',planIdx:1,model:'claude-haiku-5-5',look:3},
+ {provider:'gemini',name:'Gem Pro',role:'Investigador',planIdx:1,model:'gemini-3.1-pro-preview',look:4},
+ {provider:'gemini',name:'Gem Flash',role:'Redactor',planIdx:1,model:'',look:5},
+ {provider:'gemini',name:'Gem Lite',role:'Analista de datos',planIdx:1,model:'gemini-3.5-flash-lite',look:6},
+ {provider:'gemini',name:'Gem Mini',role:'Soporte',planIdx:1,model:'gemini-2.5-flash-lite',look:7}];
 const NAMEPOOL=['Valentina','Joaquín','Camila','Tomás','Martina','Nicolás','Julieta','Bruno'];
 const EXAMPLES=[
  'Armá un sistema de login con usuarios y contraseñas para una web',
@@ -262,21 +266,22 @@ let camX=21,camY=7.4,zoom=0.94,zoomT=0.94,camTx=21,camTy=7.4;
 const PLAY={jefe:0,lounge:0};
 let selRoom=null,summoned=null,currentTask='',ME=null,ADV=null;
 const CFGK='oficina-ia-v4';
-const CFG=Object.assign({name:'Matías',look:6,advName:'Elena',advLook:7,advPlan:1,away:false,dark:true,life:true,names:{},keys:{},chat:true,pc:{url:'http://localhost:8787',token:''}},(()=>{try{return JSON.parse(localStorage.getItem(CFGK)||'{}')}catch(e){return {}}})());
+const CFG=Object.assign({name:'Matías',look:6,advName:'Elena',advLook:7,advPlan:1,away:false,dark:true,life:true,names:{},keys:{},chat:true,strict:true,teamV2:false,pc:{url:'http://localhost:8787',token:''}},(()=>{try{return JSON.parse(localStorage.getItem(CFGK)||'{}')}catch(e){return {}}})());
 const saveCfg=()=>{try{localStorage.setItem(CFGK,JSON.stringify(CFG))}catch(e){}};
 let DARK=CFG.dark;
 const actors=()=>ME?[...agents,ME,ADV]:agents;
 
 function mkAgent(c){
  const n=++uidN,li=(c.look!=null?c.look:n-1)%LOOKS.length;
- return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
+ return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',tokIn:c.tokIn||0,tokOut:c.tokOut||0,calls:c.calls||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
   x:0,y:0,face:[0,1],path:[],pr:null,sitAfter:false,seated:true,state:'idle',progress:0,bubble:'',chat:[],askLeft:2,
   phase:Math.random()*6,away:false,cur:null,doing:'Esperando una tarea.',tasks:[],lastReply:'',wave:0,
   sitK:1,v:0,walkPh:0,hy:0,hyG:0,glanceAt:0,dip:0,arm:{},pose:null,prop:null,thought:'',act:'',alpha:1,alphaT:1,hurry:false,beh:null,hidden:false}
 }
-function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',tokIn:a.tokIn||0,tokOut:a.tokOut||0,calls:a.calls||0,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
- agents=(Array.isArray(c)?c:DEFAULTS).map(mkAgent)}
+ let base=Array.isArray(c)?c:DEFAULTS;if(!CFG.teamV2){base=DEFAULTS;CFG.teamV2=true;saveCfg()}
+ agents=base.map(mkAgent);if(base===DEFAULTS)save()}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;
 const planName=a=>prov(a).plans[a.planIdx]||prov(a).plans[0];
 const limit=a=>QUOTA[a.planIdx]??QUOTA[0];
@@ -291,17 +296,18 @@ const STATE_COL={idle:'#9aa6bd',working:'#3b7bff',done:'#16a679',asking:'#f2b01e
 const SLOT={claude:14,copilot:21,gemini:28,openai:35};
 const OFFS={};PO.forEach(p=>{const top=p!=='otro';OFFS[p]={p,ox:top?SLOT[p]:35,oy:top?0:8,doorY:top?6:8,chairY:top?1.65:9.65}});
 OFFS.jefe={p:'jefe',ox:0,oy:0,doorY:7,chairY:1.65};OFFS.rec={p:'rec',ox:7,oy:0,doorY:6,chairY:1.65};
-const deskX=(p,s)=>p==='rec'?OFFS.rec.ox+3.55:p==='jefe'?3.5:OFFS[p].ox+(s?5.1:1.9);
+const deskX=(p,s)=>p==='rec'?OFFS.rec.ox+3.55:p==='jefe'?3.5:OFFS[p].ox+((s&1)?5.1:1.9);
+const chairYOf=(p,s)=>OFFS[p].chairY+((p==='jefe'||p==='rec')?0:(s>>1)*2.45);
 const JIN=[[8,7],[7,7],[5.6,7]];
-function deskSeat(p,s){const o=OFFS[p],dx=o.ox+3.5,cx=deskX(p,s);
+function deskSeat(p,s){const o=OFFS[p],dx=o.ox+3.5,cx=deskX(p,s),cy=chairYOf(p,s);
  if(p==='jefe')return {room:'o:jefe',x:cx,y:o.chairY,f:[0,1],in:[...JIN,[5.6,o.chairY],[cx,o.chairY]]};
  if(p==='rec')return {room:'o:rec',x:cx,y:o.chairY,f:[0,1],in:[[dx,7],[dx,6],[dx,5],[o.ox+5.9,5],[o.ox+5.9,o.chairY],[cx,o.chairY]]};
- return {room:'o:'+p,x:cx,y:o.chairY,f:[0,1],in:[[dx,7],[dx,o.doorY],[dx,o.chairY],[cx,o.chairY]]}}
-function seatOf(a){if(a.home)return a.home;const s=agents.filter(x=>x.provider===a.provider).indexOf(a);return deskSeat(a.provider,Math.max(0,s)%2)}
+ return {room:'o:'+p,x:cx,y:cy,f:[0,1],in:[[dx,7],[dx,o.doorY],[dx,cy],[cx,cy]]}}
+function seatOf(a){if(a.home)return a.home;const s=agents.filter(x=>x.provider===a.provider).indexOf(a);return deskSeat(a.provider,Math.max(0,s)%4)}
 function visitSpot(t){if(t.isMe)return {room:'o:jefe',x:3.5,y:3.7,f:[0,-1],in:[...JIN,[5.6,3.7],[3.5,3.7]]};
  if(t.adv){const o=OFFS.rec,dx=o.ox+3.5;return {room:'o:rec',x:dx,y:5,f:[0,-1],in:[[dx,7],[dx,6],[dx,5]]}}
  const op=t.home?'jefe':t.provider,o=OFFS[op],dx=o.ox+3.5,ts=seatOf(t);
- return {room:'o:'+op,x:dx,y:o.chairY,f:[ts.x<dx?-1:1,0],in:[[dx,7],[dx,o.doorY],[dx,o.chairY]]}}
+ return {room:'o:'+op,x:dx,y:ts.y,f:[ts.x<dx?-1:1,0],in:[[dx,7],[dx,o.doorY],[dx,ts.y]]}}
 const MIN=[[13,7],[13,8],[13,9]];
 const SEATS=(()=>{const a=[];
  [10.75,12.25,13.75,15.25].forEach(x=>a.push({x,y:9.7,f:[0,1],via:[[x,9]]}));
@@ -412,7 +418,7 @@ function wallArtX(wx,y0,y1,z0,z1,col,fn,frame){addCustom(wx+0.12,(y0+y1)/2,()=>{
 /* ---- escritorio temático ---- */
 function agentOfDesk(p,s){if(p==='jefe')return ME;if(p==='rec')return ADV;return agents.filter(a=>a.provider===p)[s]}
 function stCol(a,pc){return !a?'#3a4258':a.state==='working'?pc:a.state==='done'?'#34c98d':a.state==='asking'?'#f2c14b':a.state==='blocked'?'#8a93a8':'#4a5370'}
-function addDesk(p,s,th){const o=OFFS[p],cx=deskX(p,s),y=o.oy+2.4,P=PROVIDERS[p];
+function addDesk(p,s,th){const o=OFFS[p],cx=deskX(p,s),y=o.oy+2.4+((p==='jefe'||p==='rec')?0:(s>>1)*2.45),P=PROVIDERS[p];
  addBox(cx-1.15,y,0.74,2.3,1.0,0.07,th.desk,{});
  addBox(cx-1.07,y+0.05,0,0.09,0.9,0.74,th.deskLeg,{sh:false});addBox(cx+0.98,y+0.05,0,0.09,0.9,0.74,th.deskLeg,{sh:false});
  addBox(cx+0.4,y+0.1,0.1,0.5,0.8,0.5,th.deskLeg,{sh:false,dk:0.01}); // cajonera
@@ -433,7 +439,7 @@ function addDesk(p,s,th){const o=OFFS[p],cx=deskX(p,s),y=o.oy+2.4,P=PROVIDERS[p]
   box({x:cx-0.95,y:y+0.12,z:0.81,w:0.2,d:0.2,h:0.17,col:th.mug,o:{}});
   th.deskExtra&&th.deskExtra(cx,y,s,on,t);
  },0.02);
- addChair(cx,o.chairY,[0,1],th.chair)}
+ addChair(cx,chairYOf(p,s),[0,1],th.chair)}
 
 /* ---- temas por proveedor ---- */
 const THEME={
@@ -476,8 +482,8 @@ function addBoard(p){const o=OFFS[p],bx=o.ox+0.14,by=o.oy+0.85;BOARDS[p]={fill:0
 
 function buildOffice(p){const o=OFFS[p],th=THEME[p],{ox,oy}=o;
  const HH=p==='jefe'?14:6;for(let x=0;x<7;x++)for(let y=0;y<HH;y++)FLOOR.push({x:ox+x,y:oy+y,c:th.floor[(x+y)%2]});
- if(p!=='jefe'){FLOOR.push({x:ox+0.5,y:oy+1.1,w:6,d:3.6,c:th.rug,rug:1});FLOOR.push({x:ox+0.7,y:oy+1.3,w:5.6,d:3.2,c:th.rug2,rug:1,border:1})}
- if(p==='jefe'||p==='rec')addDesk(p,0,th);else{addDesk(p,0,th);addDesk(p,1,th)}
+ if(p!=='jefe'){FLOOR.push({x:ox+0.5,y:oy+1.1,w:6,d:4.7,c:th.rug,rug:1});FLOOR.push({x:ox+0.7,y:oy+1.3,w:5.6,d:4.3,c:th.rug2,rug:1,border:1})}
+ if(p==='jefe'||p==='rec')addDesk(p,0,th);else{addDesk(p,0,th);addDesk(p,1,th);addDesk(p,2,th);addDesk(p,3,th)}
  const T={
  claude(){
   addBookshelf(ox+0.25,oy+0.2,1.9,0.55,2.2);addBookshelf(ox+4.85,oy+0.2,1.9,0.55,2.2);
@@ -1090,7 +1096,7 @@ function fillTarget(){const s=$('#target'),v=s.value;s.innerHTML='';const add=(v
 function setPh(){const v=$('#target').value;$('#inp').placeholder=v==='brief'?`Contale el trabajo a ${ADV.name}: ella lo reparte al equipo…`:v==='team'?'Dale una tarea al equipo…':'Escribí tu mensaje…'}
 $('#target').addEventListener('change',setPh);
 function renderChips(){const c=$('#chips');c.innerHTML='';const mk=(a,b)=>{const x=el('span','chip');x.appendChild(document.createTextNode(a+' '));x.appendChild(el('b',null,b));c.appendChild(x)};
- mk('Claude real:',sampleState);mk('Tu PC:',PC.on?'conectada':'sin conectar');mk('APIs conectadas:',String(PO.filter(p=>conn({provider:p})).length));mk('Agentes:',String(agents.length));mk('Tareas hechas:',String(tasksDone))}
+ mk('Claude real:',sampleState);mk('Tu PC:',PC.on?'conectada':'sin conectar');mk('APIs conectadas:',String(PO.filter(p=>conn({provider:p})).length));mk('Agentes:',String(agents.length));mk('Tokens usados:',fmtN(totalTok()));mk('Tareas hechas:',String(tasksDone))}
 
 /* --- barra lateral: navegación, departamentos y agentes --- */
 let RREF=[];
@@ -1186,7 +1192,7 @@ const ROLE_LIST=Object.keys(ROLES);
 function renderTeam(){
  const box=$('#teamBox');if(box.contains(document.activeElement)&&document.activeElement.tagName==='INPUT')return;box.innerHTML='';
  const dl=el('datalist');dl.id='roles';ROLE_LIST.forEach(r=>{const o=el('option');o.value=r;dl.appendChild(o)});box.appendChild(dl);
- box.appendChild(el('div','small','Los productores trabajan en este orden; el rol QA/Revisor verifica al final y devuelve lo que falla. Cada IA tiene su oficina (máx. 2 personas por IA).'));
+ box.appendChild(el('div','small','Los productores trabajan en este orden; el rol QA/Revisor verifica al final y devuelve lo que falla. Cada IA tiene su oficina (hasta 4 personas por IA).'));
  {const c=el('div','card');c.appendChild(el('b',null,'Tu oficina y tu asesor/a'));
   const g1=el('div','grid');const nm=el('input');nm.value=CFG.name;nm.placeholder='Tu nombre';nm.onchange=()=>{CFG.name=nm.value.trim()||CFG.name;ME.name=CFG.name;saveCfg();fillTarget();updateHud();renderRoster()};
   const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Tu aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=CFG.look;lk.onchange=()=>{CFG.look=+lk.value;ME.lookIdx=CFG.look;ME.look=LOOKS[CFG.look];saveCfg()};
@@ -1205,13 +1211,14 @@ function renderTeam(){
   up.onclick=()=>{[agents[i-1],agents[i]]=[agents[i],agents[i-1]];save();renderTeam();renderRoster()};dn.onclick=()=>{[agents[i+1],agents[i]]=[agents[i],agents[i+1]];save();renderTeam();renderRoster()};ar.appendChild(up);ar.appendChild(dn);top.appendChild(ar);c.appendChild(top);
   const g=el('div','grid');
   const ps=el('select');PO.forEach(k=>{const o=el('option',null,PROVIDERS[k].label+' · '+roomName('o:'+k));o.value=k;ps.appendChild(o)});ps.value=a.provider;
-  ps.onchange=()=>{if(running){ps.value=a.provider;return}const n=agents.filter(x=>x.provider===ps.value&&x!==a).length;if(n>=2){addMsg('sys','','Esa oficina ya tiene 2 personas. Elegí otra IA.');ps.value=a.provider;return}
+  ps.onchange=()=>{if(running){ps.value=a.provider;return}const n=agents.filter(x=>x.provider===ps.value&&x!==a).length;if(n>=4){addMsg('sys','','Esa oficina ya tiene 4 personas. Elegí otra IA.');ps.value=a.provider;return}
    a.provider=ps.value;a.model='';a.planIdx=Math.min(a.planIdx,prov(a).plans.length-1);resetPlacement();save();renderTeam();renderRoster()};
   const pl=el('select');p.plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)});pl.value=a.planIdx;pl.onchange=()=>{a.planIdx=+pl.value;save();renderTeam();renderRoster()};
   const role=el('input');role.setAttribute('list','roles');role.value=a.role;role.placeholder='Rol';role.onchange=()=>{a.role=role.value.trim()||a.role;save();fillTarget();renderRoster();updateDetail()};
   const mp=modelPicker(a.provider,a.model,v=>{a.model=(v===DEFMODEL[a.provider]?'':v);save();renderTeam()});g.appendChild(mp);
   g.appendChild(ps);g.appendChild(pl);g.appendChild(role);const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=a.lookIdx;lk.onchange=()=>{a.lookIdx=+lk.value;a.look=LOOKS[a.lookIdx];save();renderRoster();renderTeam()};g.appendChild(lk);c.appendChild(g);
   const lim=limit(a),bar=el('div','bar'),bi=el('i');bi.style.width=Math.min(100,a.used/lim*100)+'%';if(a.used>=lim)bi.style.background='var(--bad)';bar.appendChild(bi);c.appendChild(bar);
+  c.appendChild(el('div','small',`Tokens: ${fmtN(a.tokIn||0)} entrada · ${fmtN(a.tokOut||0)} salida · ${a.calls||0} llamadas`+(conn(a)?'':' · sin API key (no responde)')));
   c.appendChild(el('div','small',`Ventana de 5 h: ${a.used}/${lim} mensajes (estimado)`+(a.winStart?` · se reinicia en ${resetIn(a)}`:'')));
   const row=el('div','top');const b1=el('button',null,'Acercar cámara');b1.onclick=()=>selectAgent(a);
   const b2=el('button',null,'Quitar');b2.disabled=running;b2.onclick=()=>{agents.splice(i,1);if(selected===a)deselect();resetPlacement();save();fillTarget();renderTeam();renderChips();renderRoster()};
@@ -1232,7 +1239,7 @@ function modelPicker(provider,cur,onSet){
  return sel}
 function addAgentCard(box){
  if(agents.length<8){const f=el('div','add');f.appendChild(el('b',null,'Sumar un empleado'));const g=el('div','grid');
-  const ps=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.provider===k).length>=2;const o=el('option',null,PROVIDERS[k].label+(full?' (oficina llena)':''));o.value=k;o.disabled=full;ps.appendChild(o)});ps.value=PO.find(k=>agents.filter(x=>x.provider===k).length<2)||'otro';
+  const ps=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.provider===k).length>=4;const o=el('option',null,PROVIDERS[k].label+(full?' (oficina llena)':''));o.value=k;o.disabled=full;ps.appendChild(o)});ps.value=PO.find(k=>agents.filter(x=>x.provider===k).length<4)||'otro';
   const nm=el('input');nm.placeholder='Nombre de la persona';nm.value=NAMEPOOL.find(n=>!agents.some(a=>a.name===n))||'';const rl=el('input');rl.setAttribute('list','roles');rl.placeholder='Rol (ej. Frontend)';
   const pl=el('select');const fillPl=()=>{pl.innerHTML='';PROVIDERS[ps.value].plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)})};fillPl();let newModel='';const mw=el('div');mw.style.display='contents';const fillMd=()=>{newModel='';mw.innerHTML='';mw.appendChild(modelPicker(ps.value,'',v=>{newModel=v}))};fillMd();ps.onchange=()=>{fillPl();fillMd()};
   g.appendChild(ps);g.appendChild(pl);g.appendChild(mw);g.appendChild(nm);g.appendChild(rl);f.appendChild(g);
@@ -1253,7 +1260,8 @@ function renderSettings(){
   const st=el('div','stack');const ui=el('input');ui.type='text';ui.value=CFG.pc.url;ui.placeholder='http://localhost:8787';const ti=el('input');ti.type='password';ti.placeholder='Clave de acceso (la muestra el servidor)';ti.value=CFG.pc.token||'';ti.autocomplete='off';st.appendChild(ui);st.appendChild(ti);pc.appendChild(st);
   const out=el('div','small');out.textContent=PC.err||'';const cb=el('button','pri','Conectar');cb.onclick=async()=>{CFG.pc.url=ui.value.trim()||'http://localhost:8787';CFG.pc.token=ti.value.trim();saveCfg();out.textContent='Conectando…';await pcConnect(true);if(!PC.on)out.textContent='✖ '+PC.err};pc.appendChild(cb);pc.appendChild(out)}
  box.appendChild(pc);
- const h=el('div','card');h.appendChild(el('b',null,'Conexiones · API keys'));h.appendChild(el('div','small',PC.on?'Pegá la clave de cada proveedor: se guarda en tu PC (server/data/config.json) y las llamadas a la IA salen desde ahí. Sin clave, esa IA responde en modo simulado.':'Pegá la clave de cada proveedor. Sin servidor en tu PC se guarda en este navegador (texto plano) y se envía directo al proveedor. Con la PC conectada se guarda en tu computadora. Sin clave, esa IA responde en modo simulado.'));box.appendChild(h);
+ const h=el('div','card');h.appendChild(el('b',null,'Conexiones · API keys'));h.appendChild(el('div','small',PC.on?'Pegá la clave de cada proveedor: se guarda en tu PC (server/data/config.json) y las llamadas a la IA salen desde ahí. Sin clave, esa IA responde en modo simulado.':'Pegá la clave de cada proveedor. Sin servidor en tu PC se guarda en este navegador (texto plano) y se envía directo al proveedor. Con la PC conectada se guarda en tu computadora. Sin clave, esa IA responde en modo simulado.'));const sr=el('label','small');sr.style.cssText='display:flex;gap:8px;align-items:center;margin-top:8px;cursor:pointer';const ck=el('input');ck.type='checkbox';ck.checked=CFG.strict!==false;ck.onchange=()=>{CFG.strict=ck.checked;saveCfg()};sr.appendChild(ck);sr.appendChild(document.createTextNode('Modo real: si un agente no tiene API key, no responde (sin respuestas de ejemplo)'));h.appendChild(sr);
+ box.appendChild(h);
  PO.forEach(p=>{const P=PROVIDERS[p],onPC=PC.on&&PC.info.keys[p],K=PC.on?(onPC||{}):(CFG.keys[p]||{});const c=el('div','card');
   const top=el('div','top');const t=el('b',null,P.label);t.style.color=P.color;top.appendChild(t);top.appendChild(el('span','small',roomName('o:'+p)));
   const has=PC.on?!!onPC:!!(K.key||K.base);const bd=el('span','badge '+(has?'real':'sim'),has?(PC.on?'CONECTADA (PC)':'CONECTADA'):'SIMULADA');bd.style.marginLeft='auto';top.appendChild(bd);c.appendChild(top);
@@ -1344,27 +1352,30 @@ function canned(a,msgs){
  return `[Respuesta de ejemplo, sin IA conectada]\nComo ${a.role}, sobre "${task}": definí los puntos clave, los ordené por prioridad y dejé listo lo necesario para el siguiente compañero.`}
 const ADAPTERS={
  async sample(a,msgs,sys){
-  if(!sampleFn){await sleep(1800+Math.random()*1500);return canned(a,msgs)}
+  if(!sampleFn){if(CFG.strict!==false)throw new Error(`${a.name} (${prov(a).label}) no tiene API key. Cargala en Ajustes (modo real: sin respuestas simuladas).`);await sleep(1800+Math.random()*1500);return canned(a,msgs)}
   const m=[{role:'user',content:sys+'\n\n'+msgs[0].content},...msgs.slice(1)];
   try{const r=await sampleFn(m,{cache:false});return (r.text||'').trim()}
-  catch(e){if(e&&e.code==='not_granted'){sampleFn=null;sampleState='sin permiso';renderChips();addMsg('sys','','No hay permiso para usar Claude desde la página: sigo con respuestas de ejemplo.');return canned(a,msgs)}
+  catch(e){if(e&&e.code==='not_granted'){sampleFn=null;sampleState='sin permiso';renderChips();if(CFG.strict!==false)throw new Error('Sin permiso para usar Claude desde la página: cargá una API key en Ajustes.');addMsg('sys','','No hay permiso para usar Claude desde la página: sigo con respuestas de ejemplo.');return canned(a,msgs)}
    if(e&&e.code==='rate_limited')throw new Error('Se alcanzó el límite de uso de Claude. Probá en unos minutos.');throw e}},
  async pc(a,msgs,sys){const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));
-  try{const j=await pcFetch('/api/llm',{method:'POST',body:{provider:a.provider,model:a.model||'',system:sys,messages:m}});return j.text}
+  try{const j=await pcFetch('/api/llm',{method:'POST',body:{provider:a.provider,model:a.model||'',system:sys,messages:m}});addUsage(a,j.usage);return j.text}
   catch(e){if(e.quota){const q=new Error(e.message);q.quota=true;throw q}throw e}},
  async api(a,msgs,sys){const K=CFG.keys[a.provider]||{},kind=KIND[a.provider]||'openai',model=a.model||K.model||DEFMODEL[a.provider];
-  const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));let url,headers={'content-type':'application/json'},body,pick;
+  const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));let url,headers={'content-type':'application/json'},body,pick,use=()=>null;
   if(kind==='anthropic'){url=(K.base||'https://api.anthropic.com')+'/v1/messages';headers['x-api-key']=K.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
-   body={model,max_tokens:1500,system:sys,messages:m};pick=j=>(j.content||[]).map(c=>c.text||'').join('')}
+   body={model,max_tokens:2048,system:sys,messages:m};pick=j=>(j.content||[]).map(c=>c.text||'').join('');use=j=>({in:j.usage?.input_tokens||0,out:j.usage?.output_tokens||0})}
   else if(kind==='gemini'){url=(K.base||'https://generativelanguage.googleapis.com/v1beta')+`/models/${model}:generateContent?key=${encodeURIComponent(K.key)}`;
-   body={systemInstruction:{parts:[{text:sys}]},contents:m.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]}))};pick=j=>((j.candidates||[])[0]?.content?.parts||[]).map(c=>c.text||'').join('')}
+   body={systemInstruction:{parts:[{text:sys}]},contents:m.map(x=>({role:x.role==='assistant'?'model':'user',parts:[{text:x.content}]}))};pick=j=>((j.candidates||[])[0]?.content?.parts||[]).map(c=>c.text||'').join('');use=j=>({in:j.usageMetadata?.promptTokenCount||0,out:(j.usageMetadata?.candidatesTokenCount||0)+(j.usageMetadata?.thoughtsTokenCount||0)})}
   else{const base=(K.base||DEFBASE[a.provider]||'').replace(/\/$/,'');if(!base)throw new Error('Falta la URL base de la API para '+PROVIDERS[a.provider].label);
-   url=base+'/chat/completions';if(K.key)headers.Authorization='Bearer '+K.key;body={model,messages:[{role:'system',content:sys},...m]};pick=j=>j.choices?.[0]?.message?.content||''}
+   url=base+'/chat/completions';if(K.key)headers.Authorization='Bearer '+K.key;body={model,messages:[{role:'system',content:sys},...m]};pick=j=>j.choices?.[0]?.message?.content||'';use=j=>({in:j.usage?.prompt_tokens||0,out:j.usage?.completion_tokens||0})}
   let r;try{r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body)})}catch(e){throw new Error('No pude conectar con '+PROVIDERS[a.provider].label+' (¿clave, URL o CORS?)')}
   const raw=await r.text();let j={};try{j=JSON.parse(raw)}catch(e){}
   if(!r.ok){const msg=j.error?.message||j.error||raw.slice(0,160);const e=new Error(`${PROVIDERS[a.provider].label} respondió ${r.status}: ${typeof msg==='string'?msg:JSON.stringify(msg)}`);if(r.status===429)e.quota=true;throw e}
-  const t=(pick(j)||'').trim();if(!t)throw new Error('Respuesta vacía de '+PROVIDERS[a.provider].label);return t}
+  const t=(pick(j)||'').trim();if(!t)throw new Error('Respuesta vacía de '+PROVIDERS[a.provider].label);addUsage(a,use(j));return t}
 };
+function addUsage(a,u){if(!u)return;a.tokIn=(a.tokIn||0)+(u.in||0);a.tokOut=(a.tokOut||0)+(u.out||0);a.calls=(a.calls||0)+1;save();renderChips();if(typeof renderTeam==='function')renderTeam()}
+const fmtN=n=>n>=1e6?(n/1e6).toFixed(2)+' M':n>=1e3?(n/1e3).toFixed(1)+' mil':String(n);
+const totalTok=()=>agents.concat(ADV?[ADV]:[]).reduce((t,a)=>t+(a.tokIn||0)+(a.tokOut||0),0);
 const KIND={claude:'anthropic',openai:'openai',gemini:'gemini',copilot:'openai',otro:'openai'};
 const MODELS={
  claude:[{id:'claude-fable-5-2',label:'Fable 5.2 · el más potente'},{id:'claude-opus-5-5',label:'Opus 5.5 · muy potente'},{id:'claude-sonnet-5-5',label:'Sonnet 5.5 · equilibrado'},{id:'claude-haiku-5-5',label:'Haiku 5.5 · el más barato y rápido'}],
