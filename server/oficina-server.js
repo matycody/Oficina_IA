@@ -30,7 +30,7 @@ const WSREAL = fs.realpathSync(WS);
 class HttpErr extends Error { constructor(code, msg, extra) { super(msg); this.code = code; this.extra = extra || {}; } }
 const PROVIDERS = ['claude', 'copilot', 'gemini', 'openai', 'otro'];
 const KIND = { claude: 'anthropic', openai: 'openai', gemini: 'gemini', copilot: 'openai', otro: 'openai' };
-const DEFMODEL = { claude: 'claude-sonnet-4-5', openai: 'gpt-4o-mini', gemini: 'gemini-2.0-flash', copilot: 'openai/gpt-4.1', otro: 'llama-3.1-70b-instruct' };
+const DEFMODEL = { claude: 'claude-sonnet-5-5', openai: 'gpt-4o-mini', gemini: 'gemini-3.8-flash', copilot: 'openai/gpt-4.1', otro: 'llama-3.1-70b-instruct' };
 const DEFBASE = { openai: 'https://api.openai.com/v1', copilot: 'https://models.github.ai/inference', otro: '' };
 
 function sameToken(t) {

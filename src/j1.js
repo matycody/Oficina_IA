@@ -68,12 +68,12 @@ const actors=()=>ME?[...agents,ME,ADV]:agents;
 
 function mkAgent(c){
  const n=++uidN,li=(c.look!=null?c.look:n-1)%LOOKS.length;
- return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
+ return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
   x:0,y:0,face:[0,1],path:[],pr:null,sitAfter:false,seated:true,state:'idle',progress:0,bubble:'',chat:[],askLeft:2,
   phase:Math.random()*6,away:false,cur:null,doing:'Esperando una tarea.',tasks:[],lastReply:'',wave:0,
   sitK:1,v:0,walkPh:0,hy:0,hyG:0,glanceAt:0,dip:0,arm:{},pose:null,prop:null,thought:'',act:'',alpha:1,alphaT:1,hurry:false,beh:null,hidden:false}
 }
-function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
  agents=(Array.isArray(c)?c:DEFAULTS).map(mkAgent)}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;

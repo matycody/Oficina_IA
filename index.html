@@ -269,12 +269,12 @@ const actors=()=>ME?[...agents,ME,ADV]:agents;
 
 function mkAgent(c){
  const n=++uidN,li=(c.look!=null?c.look:n-1)%LOOKS.length;
- return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
+ return {id:n,provider:c.provider,name:c.name,role:c.role,planIdx:c.planIdx||0,model:c.model||'',used:c.used||0,winStart:c.winStart||0,lookIdx:li,look:LOOKS[li],
   x:0,y:0,face:[0,1],path:[],pr:null,sitAfter:false,seated:true,state:'idle',progress:0,bubble:'',chat:[],askLeft:2,
   phase:Math.random()*6,away:false,cur:null,doing:'Esperando una tarea.',tasks:[],lastReply:'',wave:0,
   sitK:1,v:0,walkPh:0,hy:0,hyG:0,glanceAt:0,dip:0,arm:{},pose:null,prop:null,thought:'',act:'',alpha:1,alphaT:1,hurry:false,beh:null,hidden:false}
 }
-function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(agents.map(a=>({provider:a.provider,name:a.name,role:a.role,planIdx:a.planIdx,model:a.model||'',used:a.used,winStart:a.winStart,look:a.lookIdx}))))}catch(e){}}
 function load(){let c=null;try{c=JSON.parse(localStorage.getItem(LS)||'null')}catch(e){}
  agents=(Array.isArray(c)?c:DEFAULTS).map(mkAgent)}
 const prov=a=>PROVIDERS[a.provider]||PROVIDERS.otro;
@@ -1206,9 +1206,10 @@ function renderTeam(){
   const g=el('div','grid');
   const ps=el('select');PO.forEach(k=>{const o=el('option',null,PROVIDERS[k].label+' · '+roomName('o:'+k));o.value=k;ps.appendChild(o)});ps.value=a.provider;
   ps.onchange=()=>{if(running){ps.value=a.provider;return}const n=agents.filter(x=>x.provider===ps.value&&x!==a).length;if(n>=2){addMsg('sys','','Esa oficina ya tiene 2 personas. Elegí otra IA.');ps.value=a.provider;return}
-   a.provider=ps.value;a.planIdx=Math.min(a.planIdx,prov(a).plans.length-1);resetPlacement();save();renderTeam();renderRoster()};
+   a.provider=ps.value;a.model='';a.planIdx=Math.min(a.planIdx,prov(a).plans.length-1);resetPlacement();save();renderTeam();renderRoster()};
   const pl=el('select');p.plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)});pl.value=a.planIdx;pl.onchange=()=>{a.planIdx=+pl.value;save();renderTeam();renderRoster()};
   const role=el('input');role.setAttribute('list','roles');role.value=a.role;role.placeholder='Rol';role.onchange=()=>{a.role=role.value.trim()||a.role;save();fillTarget();renderRoster();updateDetail()};
+  const mp=modelPicker(a.provider,a.model,v=>{a.model=(v===DEFMODEL[a.provider]?'':v);save();renderTeam()});g.appendChild(mp);
   g.appendChild(ps);g.appendChild(pl);g.appendChild(role);const lk=el('select');LOOKS.forEach((l,k)=>{const o=el('option',null,'Aspecto '+(k+1));o.value=k;lk.appendChild(o)});lk.value=a.lookIdx;lk.onchange=()=>{a.lookIdx=+lk.value;a.look=LOOKS[a.lookIdx];save();renderRoster();renderTeam()};g.appendChild(lk);c.appendChild(g);
   const lim=limit(a),bar=el('div','bar'),bi=el('i');bi.style.width=Math.min(100,a.used/lim*100)+'%';if(a.used>=lim)bi.style.background='var(--bad)';bar.appendChild(bi);c.appendChild(bar);
   c.appendChild(el('div','small',`Ventana de 5 h: ${a.used}/${lim} mensajes (estimado)`+(a.winStart?` · se reinicia en ${resetIn(a)}`:'')));
@@ -1220,13 +1221,22 @@ function renderTeam(){
  addAgentCard(box);
 }
 function removeAllAgents(){agents.forEach(a=>{if(a.beh)a.beh.stop=true});agents.length=0;if(selected&&!selected.isMe&&!selected.adv)deselect();summoned=null;resetPlacement();save();fillTarget();renderTeam();renderSettings();renderChips();renderRoster()}
+function modelPicker(provider,cur,onSet){
+ const list=MODELS[provider];
+ if(!list){const i=el('input');i.type='text';i.placeholder='Modelo (por defecto: '+(DEFMODEL[provider]||'')+')';i.value=cur||'';i.onchange=()=>onSet(i.value.trim());return i}
+ const sel=el('select');const cv=cur||DEFMODEL[provider];
+ list.forEach(m=>{const o=el('option',null,m.label);o.value=m.id;sel.appendChild(o)});
+ if(!list.some(m=>m.id===cv)){const o=el('option',null,'Personalizado · '+cv);o.value=cv;sel.appendChild(o)}
+ const oo=el('option',null,'Otro modelo (escribir el ID)…');oo.value='__otro';sel.appendChild(oo);sel.value=cv;
+ sel.onchange=()=>{if(sel.value==='__otro'){const v=(prompt('ID exacto del modelo (por ejemplo '+DEFMODEL[provider]+'):')||'').trim();if(!v){sel.value=cv;return}const o=el('option',null,'Personalizado · '+v);o.value=v;sel.insertBefore(o,oo);sel.value=v}onSet(sel.value)};
+ return sel}
 function addAgentCard(box){
  if(agents.length<8){const f=el('div','add');f.appendChild(el('b',null,'Sumar un empleado'));const g=el('div','grid');
   const ps=el('select');PO.forEach(k=>{const full=agents.filter(x=>x.provider===k).length>=2;const o=el('option',null,PROVIDERS[k].label+(full?' (oficina llena)':''));o.value=k;o.disabled=full;ps.appendChild(o)});ps.value=PO.find(k=>agents.filter(x=>x.provider===k).length<2)||'otro';
   const nm=el('input');nm.placeholder='Nombre de la persona';nm.value=NAMEPOOL.find(n=>!agents.some(a=>a.name===n))||'';const rl=el('input');rl.setAttribute('list','roles');rl.placeholder='Rol (ej. Frontend)';
-  const pl=el('select');const fillPl=()=>{pl.innerHTML='';PROVIDERS[ps.value].plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)})};fillPl();ps.onchange=fillPl;
-  g.appendChild(ps);g.appendChild(pl);g.appendChild(nm);g.appendChild(rl);f.appendChild(g);
-  const ad=el('button','pri','Agregar');ad.onclick=()=>{if(running)return;const a=mkAgent({provider:ps.value,name:nm.value.trim()||NAMEPOOL[agents.length%NAMEPOOL.length],role:rl.value.trim()||'Colaborador',planIdx:+pl.value,look:agents.length});
+  const pl=el('select');const fillPl=()=>{pl.innerHTML='';PROVIDERS[ps.value].plans.forEach((n,k)=>{const o=el('option',null,n);o.value=k;pl.appendChild(o)})};fillPl();let newModel='';const mw=el('div');mw.style.display='contents';const fillMd=()=>{newModel='';mw.innerHTML='';mw.appendChild(modelPicker(ps.value,'',v=>{newModel=v}))};fillMd();ps.onchange=()=>{fillPl();fillMd()};
+  g.appendChild(ps);g.appendChild(pl);g.appendChild(mw);g.appendChild(nm);g.appendChild(rl);f.appendChild(g);
+  const ad=el('button','pri','Agregar');ad.onclick=()=>{if(running)return;const a=mkAgent({provider:ps.value,name:nm.value.trim()||NAMEPOOL[agents.length%NAMEPOOL.length],role:rl.value.trim()||'Colaborador',planIdx:+pl.value,model:newModel,look:agents.length});
    agents.push(a);resetPlacement();save();fillTarget();renderTeam();renderSettings();renderChips();renderRoster()};
   f.appendChild(ad);f.appendChild(el('div','small','Si esa IA tiene su API key en Ajustes, responde con la IA real; si no, en modo simulado.'));box.appendChild(f)}
 
@@ -1340,9 +1350,9 @@ const ADAPTERS={
   catch(e){if(e&&e.code==='not_granted'){sampleFn=null;sampleState='sin permiso';renderChips();addMsg('sys','','No hay permiso para usar Claude desde la página: sigo con respuestas de ejemplo.');return canned(a,msgs)}
    if(e&&e.code==='rate_limited')throw new Error('Se alcanzó el límite de uso de Claude. Probá en unos minutos.');throw e}},
  async pc(a,msgs,sys){const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));
-  try{const j=await pcFetch('/api/llm',{method:'POST',body:{provider:a.provider,system:sys,messages:m}});return j.text}
+  try{const j=await pcFetch('/api/llm',{method:'POST',body:{provider:a.provider,model:a.model||'',system:sys,messages:m}});return j.text}
   catch(e){if(e.quota){const q=new Error(e.message);q.quota=true;throw q}throw e}},
- async api(a,msgs,sys){const K=CFG.keys[a.provider]||{},kind=KIND[a.provider]||'openai',model=K.model||DEFMODEL[a.provider];
+ async api(a,msgs,sys){const K=CFG.keys[a.provider]||{},kind=KIND[a.provider]||'openai',model=a.model||K.model||DEFMODEL[a.provider];
   const m=msgs.map(x=>({role:x.role==='assistant'?'assistant':'user',content:x.content}));let url,headers={'content-type':'application/json'},body,pick;
   if(kind==='anthropic'){url=(K.base||'https://api.anthropic.com')+'/v1/messages';headers['x-api-key']=K.key;headers['anthropic-version']='2023-06-01';headers['anthropic-dangerous-direct-browser-access']='true';
    body={model,max_tokens:1500,system:sys,messages:m};pick=j=>(j.content||[]).map(c=>c.text||'').join('')}
@@ -1356,7 +1366,10 @@ const ADAPTERS={
   const t=(pick(j)||'').trim();if(!t)throw new Error('Respuesta vacía de '+PROVIDERS[a.provider].label);return t}
 };
 const KIND={claude:'anthropic',openai:'openai',gemini:'gemini',copilot:'openai',otro:'openai'};
-const DEFMODEL={claude:'claude-sonnet-4-5',openai:'gpt-4o-mini',gemini:'gemini-2.0-flash',copilot:'openai/gpt-4.1',otro:'llama-3.1-70b-instruct'};
+const MODELS={
+ claude:[{id:'claude-fable-5-2',label:'Fable 5.2 · el más potente'},{id:'claude-opus-5-5',label:'Opus 5.5 · muy potente'},{id:'claude-sonnet-5-5',label:'Sonnet 5.5 · equilibrado'},{id:'claude-haiku-5-5',label:'Haiku 5.5 · el más barato y rápido'}],
+ gemini:[{id:'gemini-3.1-pro-preview',label:'Gemini 3.1 Pro · el más potente'},{id:'gemini-3.8-flash',label:'Gemini 3.8 Flash · rápido y capaz'},{id:'gemini-2.5-pro',label:'Gemini 2.5 Pro · razonamiento'},{id:'gemini-3.5-flash-lite',label:'Gemini 3.5 Flash-Lite · barato'},{id:'gemini-2.5-flash-lite',label:'Gemini 2.5 Flash-Lite · el más barato'}]};
+const DEFMODEL={claude:'claude-sonnet-5-5',openai:'gpt-4o-mini',gemini:'gemini-3.8-flash',copilot:'openai/gpt-4.1',otro:'llama-3.1-70b-instruct'};
 const DEFBASE={openai:'https://api.openai.com/v1',copilot:'https://models.github.ai/inference',otro:''};
 const KEYHINT={claude:'sk-ant-… (console.anthropic.com)',openai:'sk-… (platform.openai.com)',gemini:'AIza… (aistudio.google.com)',copilot:'Token de GitHub con permiso "models"',otro:'Clave de tu proveedor (opcional si es local)'};
 const conn=a=>{if(PC.on&&PC.info&&PC.info.keys&&PC.info.keys[a.provider])return {pc:true};const K=CFG.keys&&CFG.keys[a.provider];return K&&(K.key||(a.provider==='otro'&&K.base))?K:null};
